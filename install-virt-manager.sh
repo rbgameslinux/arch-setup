@@ -78,14 +78,34 @@ if [ -f /etc/samba/smb.conf ] && [ ! -f /etc/samba/smb.conf.bak ]; then
     sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.bak
 fi
 if [ ! -f /etc/samba/smb.conf ]; then
-    sudo touch /etc/samba/smb.conf
-fi
-if ! grep -q "usershare path" /etc/samba/smb.conf; then
-    sudo sed -i '/^\[global\]/a \
+    sudo tee /etc/samba/smb.conf > /dev/null << 'SMBCONF'
+[global]
+  workgroup = WORKGROUP
+  server string = Samba Server
+  security = user
+  map to guest = Bad User
+  usershare path = /var/lib/samba/usershares
+  usershare max shares = 100
+  usershare allow guests = yes
+  usershare owner only = yes
+SMBCONF
+elif ! grep -q "usershare path" /etc/samba/smb.conf; then
+    if grep -q "^\[global\]" /etc/samba/smb.conf; then
+        sudo sed -i '/^\[global\]/a \
   usershare path = /var/lib/samba/usershares\n\
   usershare max shares = 100\n\
   usershare allow guests = yes\n\
   usershare owner only = yes' /etc/samba/smb.conf
+    else
+        sudo bash -c 'cat >> /etc/samba/smb.conf << EOF
+
+[global]
+  usershare path = /var/lib/samba/usershares
+  usershare max shares = 100
+  usershare allow guests = yes
+  usershare owner only = yes
+EOF'
+    fi
 else
     warn "Usershare já configurado no smb.conf"
 fi
