@@ -1,43 +1,27 @@
-# RbgamesLinux
+# Scripts de Pós-Formatação para Arch Linux
 
-## install-virt-manager.sh
+Coleção de scripts para configuração inicial do Arch Linux.
 
-Script de instalação automatizada para **Virt-Manager/QEMU**, **Samba** e **CUPS** no Arch Linux.
+## Scripts
 
-### O que o script instala e configura:
+### `pos-formatacao.sh`
+Script principal de pós-formatação. Instala drivers para GPU AMD, Wine, AUR helper (paru/yay), e permite selecionar pacotes adicionais (Steam, VSCode, OBS, Chrome, etc.) de forma interativa.
 
-- **Virt-Manager + QEMU** — Gerenciador de máquinas virtuais
-- **Spice-vdagent** — Agent para melhor integre entre VM e máquina física
-- **Samba** — Compartilhamento de pastas na rede local
-- **CUPS** — Sistema de impressão
-- **Avahi** — Descoberta automática de impressoras na rede (mDNS)
+### `install-virt-manager.sh`
+Instala e configura **Virt-Manager/QEMU**, **Samba** (compartilhamento de rede) e **CUPS** (impressão).
 
-### Como usar:
+### `fix-microfone-zapzap.sh`
+Corrige o problema do ZapZap reduzir o volume do microfone no PipeWire, criando uma regra que bloqueia o controle de volume pelo QtWebEngineProcess.
+
+## Como usar
 
 ```bash
 git clone https://github.com/rbgameslinux/Scripts-de-configur-o-para-Archlinux.git
 cd Scripts-de-configur-o-para-Archlinux
-chmod +x install-virt-manager.sh
-./install-virt-manager.sh
+chmod +x *.sh
+./pos-formatacao.sh
 ```
 
-### O que o script faz:
+## Logs
 
-1. Instala pacotes do Virt-Manager, QEMU e dependências
-2. Habilita e inicia o serviço libvirtd
-3. Configura a rede padrão do libvirt
-4. Configura permissões do libvirt para o usuário atual
-5. Instala e configura o Samba com usershares
-6. Instala e configura o CUPS para impressão
-7. Instala o Avahi para descoberta de impressoras na rede
-
-### Pré-requisitos:
-
-- Arch Linux (ou derivações como Manjaro, EndeavourOS)
-- Helper AUR (paru ou yay) para instalar o fusesmb
-
-### Notas:
-
-- Após executar o script, faça **logout/login** para que as permissões de grupo tenham efeito
-- Na VM, instale também: `sudo pacman -S spice-vdagent`
-- Para configurar uma impressora, acesse `http://localhost:631` ou use o `system-config-printer`
+Cada script gera um log automaticamente em `/tmp/pos-formatacao-<data>.log`.

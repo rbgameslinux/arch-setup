@@ -10,6 +10,9 @@ info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[AVISO]${NC} $1"; }
 error() { echo -e "${RED}[ERRO]${NC} $1"; exit 1; }
 
+LOG_FILE="/tmp/pos-formatacao-$(date +%Y%m%d-%H%M%S).log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 if [ "$EUID" -eq 0 ]; then
     error "Não execute como root. Use sudo."
 fi
@@ -141,11 +144,11 @@ if ! grep -q "mdns" /etc/nsswitch.conf; then
 fi
 
 # --- Concluído ---
-echo ""
-echo -e "${GREEN}============================================${NC}"
-echo -e "${GREEN} Instalação concluída com sucesso!${NC}"
-echo -e "${GREEN}============================================${NC}"
-echo ""
+echo
+info "============================================"
+info " Instalação concluída!"
+info "============================================"
+echo
 echo "Serviços habilitados:"
 echo "  - libvirtd, smb, nmb (virt-manager + Samba)"
 echo "  - cups (impressão)"
