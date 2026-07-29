@@ -21,7 +21,7 @@ Corrige o problema do ZapZap reduzir o volume do microfone no PipeWire, criando 
 ### Via menu interativo (recomendado)
 
 ```bash
-git clone https://github.com/rbgameslinux/Scripts-de-configur-o-para-Archlinux.git
+git clone https://github.com/rbgameslinux/arch-setup.git
 cd Scripts-de-configur-o-para-Archlinux
 chmod +x *.sh scripts/*.sh
 ./launcher.sh
