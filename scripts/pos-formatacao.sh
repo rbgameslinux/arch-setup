@@ -164,12 +164,15 @@ echo "Digite os números separados por espaço/vírgula (ex: 1 3 5)"
 echo "'t' para selecionar todos | 'n' para pular"
 echo
 
-for i in "${!PACOTES[@]}"; do
-    if (( i % 3 == 0 )); then
-        idx=$(( i / 3 + 1 ))
-        printf "[%2d] %-35s (%s)\n" "$idx" "${PACOTES[i]}" "${PACOTES[i+2]}"
-    fi
-done
+PACKAGE_LIST=$(
+    for i in "${!PACOTES[@]}"; do
+        if (( i % 3 == 0 )); then
+            idx=$(( i / 3 + 1 ))
+            printf "[%2d] %-28s (%s)\n" "$idx" "${PACOTES[i]}" "${PACOTES[i+2]}"
+        fi
+    done
+)
+echo "$PACKAGE_LIST" | pr -2 -t -w ${COLUMNS:-80}
 
 echo
 read -p "Escolha: " ESCOLHA
