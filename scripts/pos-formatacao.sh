@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -17,6 +16,18 @@ if [ "$EUID" -eq 0 ]; then
     error "Não execute como root. Use sudo."
 fi
 
+ask_continue() {
+    echo
+    warn "$1"
+    echo -n "Deseja continuar mesmo assim? (s/N): "
+    read -r resp
+    [ "$resp" != "s" ] && exit 1
+}
+
+safe() {
+    "$@" || ask_continue "Falhou: $*"
+}
+
 info "============================================"
 info " Script de pós-formatação - Arch Linux"
 info " Destinado para quem usa GPU AMD"
@@ -27,46 +38,56 @@ echo
 CORES=$(nproc)
 info "CPU detectada com $CORES núcleos."
 
-# Pergunta qual AUR helper instalar
-info "Qual AUR helper você deseja instalar?"
-echo "1) paru"
-echo "2) yay"
-read -p "Escolha (1 ou 2): " AUR_CHOICE
+# Detecta se já existe um AUR helper instalado
+AUR_HELPER=""
+for helper in paru yay paru-bin yay-bin; do
+    if command -v "$helper" &> /dev/null; then
+        AUR_HELPER="$helper"
+        info "AUR helper detectado: $AUR_HELPER"
+        break
+    fi
+done
 
-# Instala dependências base
-info "Instalando dependências base..."
-sudo pacman -S --needed --noconfirm base-devel git
+if [ -z "$AUR_HELPER" ]; then
+    info "Qual AUR helper você deseja instalar?"
+    echo "1) paru"
+    echo "2) yay"
+    read -p "Escolha (1 ou 2): " AUR_CHOICE
 
-# Instala o AUR helper escolhido
-if [ "$AUR_CHOICE" == "1" ]; then
-    info "Instalando paru..."
-    git clone https://aur.archlinux.org/paru.git /tmp/paru
-    cd /tmp/paru && makepkg -si --noconfirm
-    AUR_HELPER="paru"
-elif [ "$AUR_CHOICE" == "2" ]; then
-    info "Instalando yay..."
-    git clone https://aur.archlinux.org/yay.git /tmp/yay
-    cd /tmp/yay && makepkg -si --noconfirm
-    AUR_HELPER="yay"
+    info "Instalando dependências base..."
+    safe sudo pacman -S --needed --noconfirm base-devel git
+
+    if [ "$AUR_CHOICE" == "1" ] || [ "$AUR_CHOICE" != "2" ]; then
+        info "Instalando paru..."
+        safe git clone https://aur.archlinux.org/paru.git /tmp/paru
+        (cd /tmp/paru && safe makepkg -si --noconfirm)
+        AUR_HELPER="paru"
+    else
+        info "Instalando yay..."
+        safe git clone https://aur.archlinux.org/yay.git /tmp/yay
+        (cd /tmp/yay && safe makepkg -si --noconfirm)
+        AUR_HELPER="yay"
+    fi
 else
-    warn "Opção inválida. Instalando paru por padrão."
-    git clone https://aur.archlinux.org/paru.git /tmp/paru
-    cd /tmp/paru && makepkg -si --noconfirm
-    AUR_HELPER="paru"
+    info "Usando $AUR_HELPER já instalado."
 fi
+
+# Instala dependências base (se não instalou na etapa anterior)
+info "Instalando dependências base..."
+safe sudo pacman -S --needed --noconfirm base-devel git
 
 # Configura MAKEFLAGS no /etc/makepkg.conf
 info "Configurando MAKEFLAGS para $CORES threads..."
-sudo sed -i "s/^#MAKEFLAGS=\"-j[0-9]*\"/MAKEFLAGS=\"-j$CORES\"/" /etc/makepkg.conf
-sudo sed -i "s/^MAKEFLAGS=\"-j[0-9]*\"/MAKEFLAGS=\"-j$CORES\"/" /etc/makepkg.conf
+safe sudo sed -i "s/^#MAKEFLAGS=\"-j[0-9]*\"/MAKEFLAGS=\"-j$CORES\"/" /etc/makepkg.conf
+safe sudo sed -i "s/^MAKEFLAGS=\"-j[0-9]*\"/MAKEFLAGS=\"-j$CORES\"/" /etc/makepkg.conf
 if ! grep -q "^MAKEFLAGS" /etc/makepkg.conf; then
-    echo "MAKEFLAGS=\"-j$CORES\"" | sudo tee -a /etc/makepkg.conf > /dev/null
+    echo "MAKEFLAGS=\"-j$CORES\"" | safe sudo tee -a /etc/makepkg.conf > /dev/null
 fi
 info "MAKEFLAGS definido para -j$CORES."
 
 # Instala pacotes base
 info "Instalando pacotes base..."
-sudo pacman -S --needed --noconfirm \
+safe sudo pacman -S --needed --noconfirm \
     wine \
     wine-gecko \
     wine-mono \
@@ -94,7 +115,7 @@ sudo pacman -S --needed --noconfirm \
 
 # Instala electron29-bin automaticamente como dependência
 info "Instalando electron29-bin como dependência..."
-$AUR_HELPER -S --needed --noconfirm electron29-bin
+safe $AUR_HELPER -S --needed --noconfirm electron29-bin
 
 # Lista de pacotes para seleção
 PACOTES=(
@@ -180,8 +201,8 @@ if [ ${#SELEGIONADOS[@]} -gt 0 ]; then
         done
     done
 
-    [ ${#REPO[@]} -gt 0 ] && sudo pacman -S --needed --noconfirm "${REPO[@]}"
-    [ ${#AUR[@]} -gt 0 ] && $AUR_HELPER -S --needed --noconfirm "${AUR[@]}"
+    [ ${#REPO[@]} -gt 0 ] && safe sudo pacman -S --needed --noconfirm "${REPO[@]}"
+    [ ${#AUR[@]} -gt 0 ] && safe $AUR_HELPER -S --needed --noconfirm "${AUR[@]}"
 else
     info "Nenhum pacote adicional selecionado."
 fi

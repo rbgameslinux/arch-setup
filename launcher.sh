@@ -21,11 +21,12 @@ run_script() {
         return
     fi
     dialog --title "Confirmar" --yesno "Executar ${name}?" 6 50
-    if [ $? -eq 0 ]; then
-        clear
-        bash "$script"
-        echo
-        read -p "Pressione Enter para voltar ao menu..."
+    [ $? -ne 0 ] && return
+    clear
+    if bash "$script"; then
+        dialog --title "Sucesso" --msgbox "${name} concluído com sucesso!" 6 40
+    else
+        dialog --title "Erro" --msgbox "${name} falhou.\nVerifique o log para detalhes." 7 50
     fi
 }
 
