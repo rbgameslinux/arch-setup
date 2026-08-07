@@ -42,9 +42,68 @@ unset QT_QPA_PLATFORM
 export QT_QPA_PLATFORM=xcb
 export QT_QPA_PLATFORMTHEME=default
 export QT_QPA_PLATFORM_PLUGIN_PATH=/opt/resolve/libs/plugins/platforms
-exec /opt/resolve/bin/resolve "$@"
-'
 
+LOG="$HOME/.local/state/resolve-watchdog.log"
+mkdir -p "$HOME/.local/state"
+
+if ! niri msg version >/dev/null 2>&1; then
+    exec /opt/resolve/bin/resolve "$@"
+fi
+
+resolve_window_showing() {
+    niri msg windows 2>/dev/null | awk '\''
+        /^Window ID/ { title = "" }
+        /^  Title:/ { title = $0 }
+        /^  App ID: "resolve"/ && title != "" && title !~ /Relatório de Problemas/ && title !~ /Problem Report/ { found = 1; exit }
+        END { exit found ? 0 : 1 }
+    '\''
+}
+
+attempt=0
+while [ "$attempt" -lt 3 ]; do
+    attempt=$((attempt + 1))
+    /opt/resolve/bin/resolve "$@" &
+    RPID=$!
+    echo "[$(date "+%F %T")] tentativa $attempt iniciada (PID $RPID)" >> "$LOG"
+
+    elapsed=0
+    found=0
+    while [ "$elapsed" -lt 20 ]; do
+        if resolve_window_showing; then
+            found=1
+            break
+        fi
+        if ! kill -0 "$RPID" 2>/dev/null; then
+            wait "$RPID"
+            code=$?
+            echo "[$(date "+%F %T")] resolve saiu antes de abrir janela (codigo $code)" >> "$LOG"
+            break
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    if [ "$found" -eq 1 ]; then
+        echo "[$(date "+%F %T")] janela detectada no niri (PID $RPID)" >> "$LOG"
+        wait "$RPID"
+        code=$?
+        echo "[$(date "+%F %T")] resolve encerrou (codigo $code)" >> "$LOG"
+        exit $code
+    fi
+
+    if kill -0 "$RPID" 2>/dev/null; then
+        echo "[$(date "+%F %T")] sem janela em ~20s; matando PID $RPID" >> "$LOG"
+        kill "$RPID" 2>/dev/null
+        sleep 3
+        kill -9 "$RPID" 2>/dev/null
+        wait "$RPID" 2>/dev/null
+        pkill -f '\''resolve -report[C]rash'\'' 2>/dev/null
+    fi
+done
+
+echo "[$(date "+%F %T")] resolve falhou apos 3 tentativas; desistindo" >> "$LOG"
+exit 1
+'
 if [ -f "$WRAPPER" ] && cmp -s <(printf '%s' "$WRAPPER_CONTENT") "$WRAPPER"; then
     warn "Wrapper já existente e correto, pulando"
 else
