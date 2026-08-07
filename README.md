@@ -5,7 +5,7 @@ Coleção de scripts para configuração inicial do Arch Linux.
 ## Scripts
 
 ### `pos-formatacao.sh`
-Script principal de pós-formatação. Instala drivers para GPU AMD, Wine, AUR helper (paru/yay), e permite selecionar pacotes adicionais (Steam, VSCode, OBS, Chrome, etc.) de forma interativa.
+Script principal de pós-formatação. Instala drivers para GPU AMD, Wine, AUR helper (paru/yay), e permite selecionar pacotes adicionais (Steam, VSCode, OBS, Chrome, etc.) de forma interativa. Ao final, pergunta se deseja baixar o pacote opcional de wallpapers (~1.2G, instalado em `~/Wallpapers`).
 
 ### `config-system.sh`
 Aplica configurações do sistema: variáveis de ambiente para GPU AMD (MANGOHUD, RADV_PERFTEST, cache shader), sysctl tweaks (swap, inotify, rede), limites de áudio em tempo real, TRIM SSD, e parâmetros do GRUB (quiet, amdgpu.ppfeaturemask, transparent_hugepage).

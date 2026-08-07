@@ -28,6 +28,44 @@ safe() {
     "$@" || ask_continue "Falhou: $*"
 }
 
+install_wallpapers() {
+    local DEST="$HOME/Wallpapers"
+    local TMP_FILE="/tmp/rbgames-wallpapers.tar.gz"
+    local TMP_DIR="/tmp/rbgames-wallpapers-extract"
+    local URL="https://drive.usercontent.google.com/download?id=1siQhnSD-MO8gEXxusMocu_feXn60SzXw&export=download&confirm=t"
+
+    info "Baixando wallpapers (~1.2G)... Isso pode demorar."
+    if ! curl -L --fail --retry 3 --no-progress-meter "$URL" -o "$TMP_FILE"; then
+        warn "Falha no download. Pode ser limite de cota do Google Drive."
+        return 1
+    fi
+
+    if ! gzip -t "$TMP_FILE"; then
+        warn "Arquivo baixado está corrompido (ou o Drive retornou um aviso em vez do arquivo)."
+        rm -f "$TMP_FILE"
+        return 1
+    fi
+
+    rm -rf "$TMP_DIR"
+    mkdir -p "$TMP_DIR"
+    info "Extraindo wallpapers..."
+    tar -xzf "$TMP_FILE" -C "$TMP_DIR"
+
+    if [ -d "$TMP_DIR/Rbgames-Wallpapers" ]; then
+        if [ -d "$DEST" ]; then
+            cp -r "$TMP_DIR/Rbgames-Wallpapers/." "$DEST/"
+        else
+            mv "$TMP_DIR/Rbgames-Wallpapers" "$DEST"
+        fi
+        info "Wallpapers instalados em $DEST"
+    else
+        warn "Estrutura do arquivo inesperada; nada foi instalado."
+    fi
+
+    rm -f "$TMP_FILE"
+    rm -rf "$TMP_DIR"
+}
+
 info "============================================"
 info " Script de pós-formatação - Arch Linux"
 info " Destinado para quem usa GPU AMD"
@@ -208,6 +246,17 @@ if [ ${#SELEGIONADOS[@]} -gt 0 ]; then
     [ ${#AUR[@]} -gt 0 ] && safe $AUR_HELPER -S --needed --noconfirm "${AUR[@]}"
 else
     info "Nenhum pacote adicional selecionado."
+fi
+
+# Wallpapers opcionais (coleção ML4W, ~1.2G)
+echo
+warn "Deseja baixar e instalar o pacote de wallpapers (~1.2G)?"
+echo -n "Instalar wallpapers? (s/N): "
+read -r INSTALA_WALLPAPERS
+if [ "$INSTALA_WALLPAPERS" == "s" ] || [ "$INSTALA_WALLPAPERS" == "S" ]; then
+    install_wallpapers
+else
+    info "Wallpapers ignorados."
 fi
 
 echo
