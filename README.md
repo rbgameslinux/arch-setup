@@ -16,6 +16,9 @@ Instala e configura **Virt-Manager/QEMU**, **Samba** (compartilhamento de rede) 
 ### `fix-microfone-zapzap.sh`
 Corrige o problema do ZapZap reduzir o volume do microfone no PipeWire, criando uma regra que bloqueia o controle de volume pelo QtWebEngineProcess.
 
+### `fix-davinci-resolve.sh`
+Configura o DaVinci Resolve para abrir corretamente em compositores Wayland (niri). Cria o wrapper `~/.local/bin/resolve` forçando `QT_QPA_PLATFORM=xcb` (o Qt embutido do Resolve não tem plugin wayland), ajusta o `.desktop` para usar o wrapper, adiciona as regras de janela no `~/.config/niri/config.kdl` (janela flutuando em (0,0) do monitor) e evita core dumps de 300MB–1.4GB ao fechar.
+
 ## Como usar
 
 ### Via menu interativo (recomendado)
@@ -34,6 +37,7 @@ chmod +x *.sh scripts/*.sh
 ./scripts/config-system.sh
 ./scripts/install-virt-manager.sh
 ./scripts/fix-microfone-zapzap.sh
+./scripts/fix-davinci-resolve.sh
 ```
 
 ## Logs
