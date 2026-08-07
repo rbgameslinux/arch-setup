@@ -1,2 +1,3 @@
 *.log
 /tmp/pos-formatacao-*.log
+scripts/fix-davinci-resolve.sh
