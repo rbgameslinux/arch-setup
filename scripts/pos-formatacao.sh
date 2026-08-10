@@ -66,48 +66,193 @@ install_wallpapers() {
     rm -rf "$TMP_DIR"
 }
 
+install_heroic_appimage() {
+    local BIN_DIR="$HOME/.local/bin"
+    local APP_DIR="$HOME/.local/share/applications"
+    local YML="/tmp/heroic-latest-linux.yml"
+    local APPIMAGE=""
+    local URL_BASE="https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/latest/download"
+
+    mkdir -p "$BIN_DIR" "$APP_DIR"
+
+    info "Obtendo a versão mais recente do Heroic..."
+    if ! curl -L --fail --no-progress-meter "$URL_BASE/latest-linux.yml" -o "$YML"; then
+        warn "Falha ao obter informações da versão do Heroic."
+        return 1
+    fi
+
+    APPIMAGE=$(grep -m1 '^path:' "$YML" | awk '{print $2}')
+    if [ -z "$APPIMAGE" ]; then
+        warn "Não foi possível identificar o arquivo AppImage do Heroic."
+        rm -f "$YML"
+        return 1
+    fi
+    rm -f "$YML"
+
+    info "Baixando $APPIMAGE (~180M)... Isso pode demorar."
+    if ! curl -L --fail --retry 3 --no-progress-meter "$URL_BASE/$APPIMAGE" -o "$BIN_DIR/Heroic.AppImage"; then
+        warn "Falha no download do Heroic."
+        return 1
+    fi
+
+    chmod +x "$BIN_DIR/Heroic.AppImage"
+    cat > "$APP_DIR/heroic.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Heroic Games Launcher
+GenericName=Game launcher
+Comment=Launcher para Epic Games, GOG e Amazon Games
+Exec=$BIN_DIR/Heroic.AppImage
+Icon=heroic
+Terminal=false
+Categories=Game;Utility;
+StartupWMClass=heroic
+EOF
+    info "Heroic instalado em $BIN_DIR/Heroic.AppImage"
+}
+
+github_latest_appimage() {
+    local REPO="$1"
+    local PATTERN="$2"
+    curl -sL --fail --no-progress-meter \
+        "https://api.github.com/repos/$REPO/releases/latest" |
+        grep 'browser_download_url' |
+        grep -oE 'https://[^"]+\.AppImage' |
+        grep -E "$PATTERN" |
+        head -n 1
+}
+
+install_zapzap_appimage() {
+    local BIN_DIR="$HOME/.local/bin"
+    local APP_DIR="$HOME/.local/share/applications"
+    local URL=""
+    local APPIMAGE="ZapZap.AppImage"
+
+    mkdir -p "$BIN_DIR" "$APP_DIR"
+
+    info "Obtendo a versão mais recente do ZapZap..."
+    URL=$(github_latest_appimage "rafatosta/zapzap" "linux-x86_64.AppImage")
+    if [ -z "$URL" ]; then
+        warn "Falha ao obter a URL do ZapZap."
+        return 1
+    fi
+
+    info "Baixando ZapZap (~190M)... Isso pode demorar."
+    if ! curl -L --fail --retry 3 --no-progress-meter "$URL" -o "$BIN_DIR/$APPIMAGE"; then
+        warn "Falha no download do ZapZap."
+        return 1
+    fi
+
+    chmod +x "$BIN_DIR/$APPIMAGE"
+    cat > "$APP_DIR/zapzap.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=ZapZap
+GenericName=WhatsApp client
+Comment=WhatsApp desktop nativo
+Exec=$BIN_DIR/$APPIMAGE
+Icon=zapzap
+Terminal=false
+Categories=Network;InstantMessaging;
+StartupWMClass=zapzap
+EOF
+    info "ZapZap instalado em $BIN_DIR/$APPIMAGE"
+}
+
+install_protonup_qt_appimage() {
+    local BIN_DIR="$HOME/.local/bin"
+    local APP_DIR="$HOME/.local/share/applications"
+    local URL=""
+    local APPIMAGE="ProtonUp-Qt.AppImage"
+
+    mkdir -p "$BIN_DIR" "$APP_DIR"
+
+    info "Obtendo a versão mais recente do ProtonUp-Qt..."
+    URL=$(github_latest_appimage "DavidoTek/ProtonUp-Qt" "x86_64.AppImage")
+    if [ -z "$URL" ]; then
+        warn "Falha ao obter a URL do ProtonUp-Qt."
+        return 1
+    fi
+
+    info "Baixando ProtonUp-Qt (~63M)... Isso pode demorar."
+    if ! curl -L --fail --retry 3 --no-progress-meter "$URL" -o "$BIN_DIR/$APPIMAGE"; then
+        warn "Falha no download do ProtonUp-Qt."
+        return 1
+    fi
+
+    chmod +x "$BIN_DIR/$APPIMAGE"
+    cat > "$APP_DIR/protonup-qt.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=ProtonUp-Qt
+GenericName=Proton manager
+Comment=Gerenciador de Proton GE
+Exec=$BIN_DIR/$APPIMAGE
+Icon=protonup-qt
+Terminal=false
+Categories=Utility;
+StartupWMClass=protonup-qt
+EOF
+    info "ProtonUp-Qt instalado em $BIN_DIR/$APPIMAGE"
+}
+
 info "============================================"
 info " Script de pós-formatação - Arch Linux"
 info " Destinado para quem usa GPU AMD"
 info "============================================"
 echo
 
+echo
+warn "O suporte ao AUR (Arch User Repository) permite instalar pacotes"
+warn "mantidos pela comunidade. Eles NÃO são auditados oficialmente pelo"
+warn "Arch Linux e podem estar desatualizados ou comprometidos."
+warn "Habilite apenas se souber o que está fazendo."
+echo -n "Deseja instalar suporte ao AUR? (s/N): "
+read -r AUR_ENABLED
+if [ "$AUR_ENABLED" == "s" ] || [ "$AUR_ENABLED" == "S" ]; then
+    AUR_ENABLED="s"
+else
+    AUR_ENABLED="n"
+fi
+
 # Detecta número de núcleos da CPU
 CORES=$(nproc)
 info "CPU detectada com $CORES núcleos."
 
-# Detecta se já existe um AUR helper instalado
-AUR_HELPER=""
-for helper in paru yay paru-bin yay-bin; do
-    if command -v "$helper" &> /dev/null; then
-        AUR_HELPER="$helper"
-        info "AUR helper detectado: $AUR_HELPER"
-        break
-    fi
-done
+if [ "$AUR_ENABLED" == "s" ]; then
+    # Detecta se já existe um AUR helper instalado
+    AUR_HELPER=""
+    for helper in paru yay paru-bin yay-bin; do
+        if command -v "$helper" &> /dev/null; then
+            AUR_HELPER="$helper"
+            info "AUR helper detectado: $AUR_HELPER"
+            break
+        fi
+    done
 
-if [ -z "$AUR_HELPER" ]; then
-    info "Qual AUR helper você deseja instalar?"
-    echo "1) paru"
-    echo "2) yay"
-    read -p "Escolha (1 ou 2): " AUR_CHOICE
+    if [ -z "$AUR_HELPER" ]; then
+        info "Qual AUR helper você deseja instalar?"
+        echo "1) paru"
+        echo "2) yay"
+        read -p "Escolha (1 ou 2): " AUR_CHOICE
 
-    info "Instalando dependências base..."
-    safe sudo pacman -S --needed --noconfirm base-devel git
+        info "Instalando dependências base..."
+        safe sudo pacman -S --needed --noconfirm base-devel git
 
-    if [ "$AUR_CHOICE" == "1" ] || [ "$AUR_CHOICE" != "2" ]; then
-        info "Instalando paru..."
-        safe git clone https://aur.archlinux.org/paru.git /tmp/paru
-        (cd /tmp/paru && safe makepkg -si --noconfirm)
-        AUR_HELPER="paru"
+        if [ "$AUR_CHOICE" == "1" ] || [ "$AUR_CHOICE" != "2" ]; then
+            info "Instalando paru..."
+            safe git clone https://aur.archlinux.org/paru.git /tmp/paru
+            (cd /tmp/paru && safe makepkg -si --noconfirm)
+            AUR_HELPER="paru"
+        else
+            info "Instalando yay..."
+            safe git clone https://aur.archlinux.org/yay.git /tmp/yay
+            (cd /tmp/yay && safe makepkg -si --noconfirm)
+            AUR_HELPER="yay"
+        fi
     else
-        info "Instalando yay..."
-        safe git clone https://aur.archlinux.org/yay.git /tmp/yay
-        (cd /tmp/yay && safe makepkg -si --noconfirm)
-        AUR_HELPER="yay"
+        info "Usando $AUR_HELPER já instalado."
     fi
-else
-    info "Usando $AUR_HELPER já instalado."
 fi
 
 # Instala dependências base (se não instalou na etapa anterior)
@@ -152,8 +297,10 @@ safe sudo pacman -S --needed --noconfirm \
     unzip
 
 # Instala electron29-bin automaticamente como dependência
-info "Instalando electron29-bin como dependência..."
-safe $AUR_HELPER -S --needed --noconfirm electron29-bin
+if [ "$AUR_ENABLED" == "s" ]; then
+    info "Instalando electron29-bin como dependência..."
+    safe $AUR_HELPER -S --needed --noconfirm electron29-bin
+fi
 
 # Lista de pacotes para seleção
 PACOTES=(
@@ -165,11 +312,9 @@ PACOTES=(
     "deckboard-bin"      "Controle remoto para PC via celular" "aur"
     "r-linux"            "Linguagem R para análise estatística" "aur"
     "lutris"             "Gerenciador de jogos (Wine/Nativo)" "repo"
-    "heroic-games-launcher-bin" "Launcher para Epic/GOG/Amazon" "aur"
     "visual-studio-code-bin" "Editor de código Microsoft" "aur"
-    "protonup-qt"        "Gerenciador de Proton GE" "aur"
     "ventoy"             "Criar USB bootável múltipla" "repo"
-    "obs-studio-tytan652" "OBS Studio com plugins extras" "aur"
+    "obs-studio"         "OBS Studio (versão oficial) + plugin de browser" "repo"
     "obs-vkcapture"      "Captura de tela Vulkan para OBS" "aur"
     "winff"              "Conversor de vídeo com GUI" "repo"
     "gimp"               "Editor de imagens avançado" "repo"
@@ -189,25 +334,38 @@ PACOTES=(
     "firefox"            "Navegador Mozilla Firefox" "repo"
     "lact"               "Controle de GPU AMD" "aur"
     "qbittorrent"        "Cliente torrent" "repo"
-    "zapzap"             "WhatsApp desktop nativo" "aur"
     "filelight"          "Analisador de espaço em disco" "repo"
-    "protontricks"       "Winetricks simplificado para Proton" "aur"
+    "protontricks"       "Winetricks simplificado para Proton" "repo"
 )
 
 echo
 info "============================================"
 info " Seleção de Pacotes Adicionais"
 info "============================================"
-echo "Digite os números separados por espaço/vírgula (ex: 1 3 5)"
+if [ "$AUR_ENABLED" == "s" ]; then
+    echo "Digite os números separados por espaço/vírgula (ex: 1 3 5)"
+else
+    warn "Suporte ao AUR desabilitado: apenas pacotes do repositório (repo) serão exibidos."
+    echo "Digite os números separados por espaço/vírgula (ex: 1 3 5)"
+fi
 echo "'t' para selecionar todos | 'n' para pular"
 echo
 
-PACKAGE_LIST=$(
-    for i in "${!PACOTES[@]}"; do
-        if (( i % 3 == 0 )); then
-            idx=$(( i / 3 + 1 ))
-            printf "[%2d] %-28s (%s)\n" "$idx" "${PACOTES[i]}" "${PACOTES[i+2]}"
+VISIVEIS=()
+for i in "${!PACOTES[@]}"; do
+    if (( i % 3 == 0 )); then
+        if [ "$AUR_ENABLED" != "s" ] && [ "${PACOTES[i+2]}" == "aur" ]; then
+            continue
         fi
+        VISIVEIS+=("$i")
+    fi
+done
+
+PACKAGE_LIST=$(
+    n=1
+    for i in "${VISIVEIS[@]}"; do
+        printf "[%2d] %-25s (%s)\n" "$n" "${PACOTES[i]}" "${PACOTES[i+2]}"
+        n=$(( n + 1 ))
     done
 )
 echo "$PACKAGE_LIST" | pr -2 -t -w ${COLUMNS:-80}
@@ -217,15 +375,15 @@ read -p "Escolha: " ESCOLHA
 
 SELEGIONADOS=()
 if [ "$ESCOLHA" == "t" ]; then
-    for i in "${!PACOTES[@]}"; do
-        (( i % 3 == 0 )) && SELEGIONADOS+=("${PACOTES[i]}")
+    for i in "${VISIVEIS[@]}"; do
+        SELEGIONADOS+=("${PACOTES[i]}")
     done
 elif [ "$ESCOLHA" != "n" ]; then
     ESCOLHA=$(echo "$ESCOLHA" | tr ',' ' ' | tr -s ' ')
     for num in $ESCOLHA; do
-        idx=$(( (num - 1) * 3 ))
-        if [ $idx -ge 0 ] && [ $idx -lt ${#PACOTES[@]} ]; then
-            SELEGIONADOS+=("${PACOTES[idx]}")
+        idx=$(( num - 1 ))
+        if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#VISIVEIS[@]}" ]; then
+            SELEGIONADOS+=("${PACOTES[${VISIVEIS[idx]}]}")
         fi
     done
 fi
@@ -242,6 +400,11 @@ if [ ${#SELEGIONADOS[@]} -gt 0 ]; then
         done
     done
 
+    # obs-studio instala o plugin de browser junto (dependência)
+    if [ ${#REPO[@]} -gt 0 ] && [[ " ${REPO[*]} " == *" obs-studio "* ]]; then
+        REPO+=("obs-studio-plugin-browser")
+    fi
+
     [ ${#REPO[@]} -gt 0 ] && safe sudo pacman -S --needed --noconfirm "${REPO[@]}"
     [ ${#AUR[@]} -gt 0 ] && safe $AUR_HELPER -S --needed --noconfirm "${AUR[@]}"
 else
@@ -257,6 +420,39 @@ if [ "$INSTALA_WALLPAPERS" == "s" ] || [ "$INSTALA_WALLPAPERS" == "S" ]; then
     install_wallpapers
 else
     info "Wallpapers ignorados."
+fi
+
+# Heroic Games Launcher opcional (AppImage direto do site oficial, fora do AUR)
+echo
+warn "Deseja baixar o Heroic Games Launcher (AppImage) direto do site oficial?"
+echo -n "Instalar Heroic? (s/N): "
+read -r INSTALA_HEROIC
+if [ "$INSTALA_HEROIC" == "s" ] || [ "$INSTALA_HEROIC" == "S" ]; then
+    install_heroic_appimage
+else
+    info "Heroic ignorado."
+fi
+
+# ZapZap opcional (AppImage direto do site oficial, fora do AUR)
+echo
+warn "Deseja baixar o ZapZap (AppImage) direto do site oficial?"
+echo -n "Instalar ZapZap? (s/N): "
+read -r INSTALA_ZAPZAP
+if [ "$INSTALA_ZAPZAP" == "s" ] || [ "$INSTALA_ZAPZAP" == "S" ]; then
+    install_zapzap_appimage
+else
+    info "ZapZap ignorado."
+fi
+
+# ProtonUp-Qt opcional (AppImage direto do site oficial, fora do AUR)
+echo
+warn "Deseja baixar o ProtonUp-Qt (AppImage) direto do site oficial?"
+echo -n "Instalar ProtonUp-Qt? (s/N): "
+read -r INSTALA_PUQ
+if [ "$INSTALA_PUQ" == "s" ] || [ "$INSTALA_PUQ" == "S" ]; then
+    install_protonup_qt_appimage
+else
+    info "ProtonUp-Qt ignorado."
 fi
 
 echo
