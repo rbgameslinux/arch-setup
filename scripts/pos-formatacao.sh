@@ -71,6 +71,7 @@ install_heroic_appimage() {
     local APP_DIR="$HOME/.local/share/applications"
     local YML="/tmp/heroic-latest-linux.yml"
     local APPIMAGE=""
+    local ICON_PATH=""
     local URL_BASE="https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/latest/download"
 
     mkdir -p "$BIN_DIR" "$APP_DIR"
@@ -96,6 +97,10 @@ install_heroic_appimage() {
     fi
 
     chmod +x "$BIN_DIR/Heroic.AppImage"
+
+    ICON_PATH=$(install_appimage_icon "$BIN_DIR/Heroic.AppImage" "heroic" || true)
+    [ -z "$ICON_PATH" ] && ICON_PATH="heroic"
+
     cat > "$APP_DIR/heroic.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -103,11 +108,12 @@ Name=Heroic Games Launcher
 GenericName=Game launcher
 Comment=Launcher para Epic Games, GOG e Amazon Games
 Exec=$BIN_DIR/Heroic.AppImage
-Icon=heroic
+Icon=$ICON_PATH
 Terminal=false
 Categories=Game;Utility;
 StartupWMClass=heroic
 EOF
+    update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
     info "Heroic instalado em $BIN_DIR/Heroic.AppImage"
 }
 
@@ -122,11 +128,61 @@ github_latest_appimage() {
         head -n 1
 }
 
+install_appimage_icon() {
+    local APPIMAGE="$1"
+    local ICON_NAME="$2"
+    local TMP="/tmp/appimage-icon-$$"
+    local SRC=""
+    local EXT=""
+    local TYPE=""
+    local DEST_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
+
+    rm -rf "$TMP"
+    mkdir -p "$TMP"
+
+    if ! (cd "$TMP" && "$APPIMAGE" --appimage-extract > /dev/null 2>&1); then
+        rm -rf "$TMP"
+        return 1
+    fi
+
+    if [ -e "$TMP/squashfs-root/.DirIcon" ]; then
+        SRC=$(readlink -f "$TMP/squashfs-root/.DirIcon")
+    else
+        SRC=$(find "$TMP/squashfs-root" -type f \( -iname '*.png' -o -iname '*.svg' \) 2>/dev/null \
+            | grep -viE 'tray|splash|banner|header' | head -n 1)
+    fi
+
+    [ -z "$SRC" ] || [ ! -f "$SRC" ] && { rm -rf "$TMP"; return 1; }
+
+    if command -v file &> /dev/null; then
+        TYPE=$(file -b --mime-type "$SRC")
+        case "$TYPE" in
+            *svg*) EXT="svg" ;;
+            *png*) EXT="png" ;;
+            *)     EXT="png" ;;
+        esac
+    else
+        EXT="${SRC##*.}"
+        [ "$EXT" == "$SRC" ] && EXT="png"
+    fi
+
+    if [ "$EXT" == "svg" ]; then
+        DEST_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+    fi
+
+    mkdir -p "$DEST_DIR"
+    cp "$SRC" "$DEST_DIR/$ICON_NAME.$EXT"
+    rm -rf "$TMP"
+    gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+    echo "$DEST_DIR/$ICON_NAME.$EXT"
+}
+
 install_zapzap_appimage() {
     local BIN_DIR="$HOME/.local/bin"
     local APP_DIR="$HOME/.local/share/applications"
     local URL=""
     local APPIMAGE="ZapZap.AppImage"
+    local ICON_PATH=""
 
     mkdir -p "$BIN_DIR" "$APP_DIR"
 
@@ -144,6 +200,10 @@ install_zapzap_appimage() {
     fi
 
     chmod +x "$BIN_DIR/$APPIMAGE"
+
+    ICON_PATH=$(install_appimage_icon "$BIN_DIR/$APPIMAGE" "zapzap" || true)
+    [ -z "$ICON_PATH" ] && ICON_PATH="zapzap"
+
     cat > "$APP_DIR/zapzap.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -151,11 +211,12 @@ Name=ZapZap
 GenericName=WhatsApp client
 Comment=WhatsApp desktop nativo
 Exec=$BIN_DIR/$APPIMAGE
-Icon=zapzap
+Icon=$ICON_PATH
 Terminal=false
 Categories=Network;InstantMessaging;
 StartupWMClass=zapzap
 EOF
+    update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
     info "ZapZap instalado em $BIN_DIR/$APPIMAGE"
 }
 
@@ -164,6 +225,7 @@ install_protonup_qt_appimage() {
     local APP_DIR="$HOME/.local/share/applications"
     local URL=""
     local APPIMAGE="ProtonUp-Qt.AppImage"
+    local ICON_PATH=""
 
     mkdir -p "$BIN_DIR" "$APP_DIR"
 
@@ -181,6 +243,10 @@ install_protonup_qt_appimage() {
     fi
 
     chmod +x "$BIN_DIR/$APPIMAGE"
+
+    ICON_PATH=$(install_appimage_icon "$BIN_DIR/$APPIMAGE" "protonup-qt" || true)
+    [ -z "$ICON_PATH" ] && ICON_PATH="protonup-qt"
+
     cat > "$APP_DIR/protonup-qt.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -188,11 +254,12 @@ Name=ProtonUp-Qt
 GenericName=Proton manager
 Comment=Gerenciador de Proton GE
 Exec=$BIN_DIR/$APPIMAGE
-Icon=protonup-qt
+Icon=$ICON_PATH
 Terminal=false
 Categories=Utility;
 StartupWMClass=protonup-qt
 EOF
+    update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
     info "ProtonUp-Qt instalado em $BIN_DIR/$APPIMAGE"
 }
 
@@ -312,6 +379,8 @@ PACOTES=(
     "deckboard-bin"      "Controle remoto para PC via celular" "aur"
     "r-linux"            "Linguagem R para análise estatística" "aur"
     "lutris"             "Gerenciador de jogos (Wine/Nativo)" "repo"
+    "heroic-games-launcher" "Launcher para Epic/GOG/Amazon" "appimage"
+    "protonup-qt"        "Gerenciador de Proton GE" "appimage"
     "visual-studio-code-bin" "Editor de código Microsoft" "aur"
     "ventoy"             "Criar USB bootável múltipla" "repo"
     "obs-studio"         "OBS Studio (versão oficial) + plugin de browser" "repo"
@@ -331,6 +400,7 @@ PACOTES=(
     "bash-completion"    "Auto-completar avançado" "repo"
     "telegram-desktop"   "Mensageiro Telegram" "repo"
     "discord"            "Mensageiro para gamers" "repo"
+    "zapzap"             "WhatsApp desktop nativo" "appimage"
     "firefox"            "Navegador Mozilla Firefox" "repo"
     "lact"               "Controle de GPU AMD" "aur"
     "qbittorrent"        "Cliente torrent" "repo"
@@ -345,7 +415,7 @@ info "============================================"
 if [ "$AUR_ENABLED" == "s" ]; then
     echo "Digite os números separados por espaço/vírgula (ex: 1 3 5)"
 else
-    warn "Suporte ao AUR desabilitado: apenas pacotes do repositório (repo) serão exibidos."
+    warn "Suporte ao AUR desabilitado: pacotes AUR ficam ocultos da lista."
     echo "Digite os números separados por espaço/vírgula (ex: 1 3 5)"
 fi
 echo "'t' para selecionar todos | 'n' para pular"
@@ -364,7 +434,7 @@ done
 PACKAGE_LIST=$(
     n=1
     for i in "${VISIVEIS[@]}"; do
-        printf "[%2d] %-25s (%s)\n" "$n" "${PACOTES[i]}" "${PACOTES[i+2]}"
+        printf "[%2d] %-22s (%s)\n" "$n" "${PACOTES[i]}" "${PACOTES[i+2]}"
         n=$(( n + 1 ))
     done
 )
@@ -391,10 +461,15 @@ fi
 if [ ${#SELEGIONADOS[@]} -gt 0 ]; then
     REPO=()
     AUR=()
+    APPIMAGE=()
     for pkg in "${SELEGIONADOS[@]}"; do
         for i in "${!PACOTES[@]}"; do
             if (( i % 3 == 0 )) && [ "${PACOTES[i]}" == "$pkg" ]; then
-                [ "${PACOTES[i+2]}" == "repo" ] && REPO+=("$pkg") || AUR+=("$pkg")
+                case "${PACOTES[i+2]}" in
+                    repo)     REPO+=("$pkg") ;;
+                    aur)      AUR+=("$pkg") ;;
+                    appimage) APPIMAGE+=("$pkg") ;;
+                esac
                 break
             fi
         done
@@ -407,6 +482,15 @@ if [ ${#SELEGIONADOS[@]} -gt 0 ]; then
 
     [ ${#REPO[@]} -gt 0 ] && safe sudo pacman -S --needed --noconfirm "${REPO[@]}"
     [ ${#AUR[@]} -gt 0 ] && safe $AUR_HELPER -S --needed --noconfirm "${AUR[@]}"
+
+    # Instala os AppImages (download direto do site oficial, fora do AUR)
+    for pkg in "${APPIMAGE[@]}"; do
+        case "$pkg" in
+            heroic-games-launcher) install_heroic_appimage ;;
+            zapzap)                install_zapzap_appimage ;;
+            protonup-qt)           install_protonup_qt_appimage ;;
+        esac
+    done
 else
     info "Nenhum pacote adicional selecionado."
 fi
@@ -420,39 +504,6 @@ if [ "$INSTALA_WALLPAPERS" == "s" ] || [ "$INSTALA_WALLPAPERS" == "S" ]; then
     install_wallpapers
 else
     info "Wallpapers ignorados."
-fi
-
-# Heroic Games Launcher opcional (AppImage direto do site oficial, fora do AUR)
-echo
-warn "Deseja baixar o Heroic Games Launcher (AppImage) direto do site oficial?"
-echo -n "Instalar Heroic? (s/N): "
-read -r INSTALA_HEROIC
-if [ "$INSTALA_HEROIC" == "s" ] || [ "$INSTALA_HEROIC" == "S" ]; then
-    install_heroic_appimage
-else
-    info "Heroic ignorado."
-fi
-
-# ZapZap opcional (AppImage direto do site oficial, fora do AUR)
-echo
-warn "Deseja baixar o ZapZap (AppImage) direto do site oficial?"
-echo -n "Instalar ZapZap? (s/N): "
-read -r INSTALA_ZAPZAP
-if [ "$INSTALA_ZAPZAP" == "s" ] || [ "$INSTALA_ZAPZAP" == "S" ]; then
-    install_zapzap_appimage
-else
-    info "ZapZap ignorado."
-fi
-
-# ProtonUp-Qt opcional (AppImage direto do site oficial, fora do AUR)
-echo
-warn "Deseja baixar o ProtonUp-Qt (AppImage) direto do site oficial?"
-echo -n "Instalar ProtonUp-Qt? (s/N): "
-read -r INSTALA_PUQ
-if [ "$INSTALA_PUQ" == "s" ] || [ "$INSTALA_PUQ" == "S" ]; then
-    install_protonup_qt_appimage
-else
-    info "ProtonUp-Qt ignorado."
 fi
 
 echo
