@@ -34,11 +34,12 @@ while true; do
     choice=$(dialog --title "Scripts Arch Linux" \
         --ok-label "Selecionar" \
         --cancel-label "Sair" \
-        --menu "Escolha um script para executar:" 17 65 5 \
+        --menu "Escolha um script para executar:" 18 65 6 \
         "1" "Pós-formatação (drivers, pacotes, AUR)" \
         "2" "Configurar Sistema (env, sysctl, GRUB)" \
         "3" "Virt-Manager + Samba + CUPS" \
         "4" "Fix Microfone ZapZap" \
+        "5" "Fix DaVinci Resolve (niri + XWayland)" \
         3>&1 1>&2 2>&3)
 
     clear
@@ -47,6 +48,7 @@ while true; do
         2) run_script "$DIR/scripts/config-system.sh" "Configurar Sistema" ;;
         3) run_script "$DIR/scripts/install-virt-manager.sh" "Virt-Manager" ;;
         4) run_script "$DIR/scripts/fix-microfone-zapzap.sh" "Fix Microfone ZapZap" ;;
+        5) run_script "$DIR/scripts/fix-davinci-resolve.sh" "Fix DaVinci Resolve" ;;
         *) exit 0 ;;
     esac
 done
