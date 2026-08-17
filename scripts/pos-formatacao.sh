@@ -402,7 +402,6 @@ PACOTES=(
     "discord"            "Mensageiro para gamers" "repo"
     "zapzap"             "WhatsApp desktop nativo" "appimage"
     "firefox"            "Navegador Mozilla Firefox" "repo"
-    "lact"               "Controle de GPU AMD" "aur"
     "qbittorrent"        "Cliente torrent" "repo"
     "filelight"          "Analisador de espaço em disco" "repo"
     "protontricks"       "Winetricks simplificado para Proton" "repo"

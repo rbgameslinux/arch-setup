@@ -113,7 +113,7 @@ if [ -f "$GRUB_FILE" ]; then
 
     CURRENT=$(grep "^GRUB_CMDLINE_LINUX_DEFAULT" "$GRUB_FILE" | sed 's/GRUB_CMDLINE_LINUX_DEFAULT="//;s/"$//')
 
-    NEW_PARAMS="quiet amdgpu.ppfeaturemask=0xffffffff transparent_hugepage=madvise"
+    NEW_PARAMS="quiet transparent_hugepage=madvise"
 
     for param in $NEW_PARAMS; do
         if ! echo "$CURRENT" | grep -q "$param"; then
@@ -149,6 +149,6 @@ echo "  - /etc/sysctl.d/99-performance.conf (swap, inotify, rede)"
 echo "  - /etc/security/limits.d/99-audio.conf (rtprio, memlock)"
 echo "  - fstrim.timer ativado (TRIM SSD)"
 echo "  - Timeout do systemd reduzido"
-echo "  - GRUB: quiet + amdgpu.ppfeaturemask + transparent_hugepage"
+echo "  - GRUB: quiet + transparent_hugepage"
 echo
 echo "Recomendado: reinicie o sistema ou faça logout/login"

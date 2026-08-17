@@ -8,7 +8,7 @@ Coleção de scripts para configuração inicial do Arch Linux.
 Script principal de pós-formatação. Instala drivers para GPU AMD e Wine, e pergunta no início se deseja habilitar o suporte ao AUR (com aviso sobre pacotes da comunidade). A lista selecionável de pacotes adicionais (Steam, VSCode, OBS, Chrome, etc.) só exibe pacotes AUR se o suporte estiver habilitado. Ao selecionar o `obs-studio`, o plugin de browser (`obs-studio-plugin-browser`) é instalado junto. Alguns apps evitam o AUR e são baixados como AppImage direto do site oficial (Heroic, ZapZap, ProtonUp-Qt, instalados em `~/.local/bin/`). Esses AppImages também ganham ícone no menu (extraído do próprio AppImage e instalado em `~/.local/share/icons/hicolor/`). Ao final, pergunta se deseja baixar o pacote opcional de wallpapers (~1.2G, instalado em `~/Wallpapers`).
 
 ### `config-system.sh`
-Aplica configurações do sistema: variáveis de ambiente para GPU AMD (MANGOHUD, RADV_PERFTEST, cache shader), sysctl tweaks (swap, inotify, rede), limites de áudio em tempo real, TRIM SSD, e parâmetros do GRUB (quiet, amdgpu.ppfeaturemask, transparent_hugepage).
+Aplica configurações do sistema: variáveis de ambiente para GPU AMD (MANGOHUD, RADV_PERFTEST, cache shader), sysctl tweaks (swap, inotify, rede), limites de áudio em tempo real, TRIM SSD, e parâmetros do GRUB (quiet, transparent_hugepage).
 
 ### `install-virt-manager.sh`
 Instala e configura **Virt-Manager/QEMU**, **Samba** (compartilhamento de rede) e **CUPS** (impressão).
