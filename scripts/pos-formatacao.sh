@@ -494,17 +494,6 @@ else
     info "Nenhum pacote adicional selecionado."
 fi
 
-# Wallpapers opcionais (coleção ML4W, ~1.2G)
-echo
-warn "Deseja baixar e instalar o pacote de wallpapers (~1.2G)?"
-echo -n "Instalar wallpapers? (s/N): "
-read -r INSTALA_WALLPAPERS
-if [ "$INSTALA_WALLPAPERS" == "s" ] || [ "$INSTALA_WALLPAPERS" == "S" ]; then
-    install_wallpapers
-else
-    info "Wallpapers ignorados."
-fi
-
 echo
 info "============================================"
 info " Instalação concluída!"
