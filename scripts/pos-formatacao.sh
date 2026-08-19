@@ -306,13 +306,15 @@ if [ "$AUR_ENABLED" == "s" ]; then
         info "Instalando dependências base..."
         safe sudo pacman -S --needed --noconfirm base-devel git
 
-        if [ "$AUR_CHOICE" == "1" ] || [ "$AUR_CHOICE" != "2" ]; then
+        if [ "$AUR_CHOICE" == "1" ]; then
             info "Instalando paru..."
+            rm -rf /tmp/paru
             safe git clone https://aur.archlinux.org/paru.git /tmp/paru
             (cd /tmp/paru && safe makepkg -si --noconfirm)
             AUR_HELPER="paru"
         else
             info "Instalando yay..."
+            rm -rf /tmp/yay
             safe git clone https://aur.archlinux.org/yay.git /tmp/yay
             (cd /tmp/yay && safe makepkg -si --noconfirm)
             AUR_HELPER="yay"
@@ -385,7 +387,7 @@ PACOTES=(
     "ventoy"             "Criar USB bootável múltipla" "repo"
     "obs-studio"         "OBS Studio (versão oficial) + plugin de browser" "repo"
     "obs-vkcapture"      "Captura de tela Vulkan para OBS" "aur"
-    "winff"              "Conversor de vídeo com GUI" "repo"
+    "winff"              "Conversor de vídeo com GUI" "aur"
     "gimp"               "Editor de imagens avançado" "repo"
     "droidcam"           "Usar celular como webcam" "aur"
     "v4l2loopback-dc-dkms" "Módulo kernel para Droidcam" "aur"
@@ -480,7 +482,14 @@ if [ ${#SELEGIONADOS[@]} -gt 0 ]; then
     fi
 
     [ ${#REPO[@]} -gt 0 ] && safe sudo pacman -S --needed --noconfirm "${REPO[@]}"
-    [ ${#AUR[@]} -gt 0 ] && safe $AUR_HELPER -S --needed --noconfirm "${AUR[@]}"
+
+    if [ ${#AUR[@]} -gt 0 ]; then
+        if [ -z "$AUR_HELPER" ]; then
+            warn "Nenhum AUR helper encontrado. Pacotes AUR não instalados: ${AUR[*]}"
+        else
+            safe $AUR_HELPER -S --needed --noconfirm "${AUR[@]}"
+        fi
+    fi
 
     # Instala os AppImages (download direto do site oficial, fora do AUR)
     for pkg in "${APPIMAGE[@]}"; do

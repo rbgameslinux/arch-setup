@@ -70,6 +70,7 @@ info "Sysctl tweaks aplicados em ${SYSCTL_FILE}"
 # --- 3. Limites do sistema ---
 info "Configurando limites do sistema..."
 LIMITS_FILE="/etc/security/limits.d/99-audio.conf"
+sudo mkdir -p /etc/security/limits.d
 sudo tee "$LIMITS_FILE" > /dev/null << 'EOF'
 # Limites para áudio em tempo real (PipeWire/JACK)
 @audio - rtprio 95
