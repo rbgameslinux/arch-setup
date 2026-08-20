@@ -363,7 +363,8 @@ safe sudo pacman -S --needed --noconfirm \
     eog \
     unrar \
     zip \
-    unzip
+    unzip \
+    udiskie
 
 # Instala electron29-bin automaticamente como dependência
 if [ "$AUR_ENABLED" == "s" ]; then
