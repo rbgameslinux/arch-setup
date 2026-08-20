@@ -393,6 +393,7 @@ PACOTES=(
     "v4l2loopback-dc-dkms" "Módulo kernel para Droidcam" "aur"
     "antimicrox"         "Mapear teclado para controle" "aur"
     "google-chrome"      "Navegador Google Chrome" "aur"
+    "github-cli"         "CLI oficial do GitHub (gh)" "repo"
     "steam"              "Plataforma de jogos digitais" "repo"
     "ark"                "Gerenciador de arquivos (KDE)" "repo"
     "gedit"              "Editor de texto GNOME" "repo"
@@ -501,6 +502,66 @@ if [ ${#SELEGIONADOS[@]} -gt 0 ]; then
     done
 else
     info "Nenhum pacote adicional selecionado."
+fi
+
+# =============================================
+# Icon Themes & Fonts
+# =============================================
+ICONS_FONTS=(
+    "papirus-icon-theme"       "Tema de ícones Papirus" "repo"
+    "breeze-icons"             "Ícones Breeze (KDE)" "repo"
+    "ttf-nerd-fonts-symbols"   "Símbolos Nerd Fonts" "repo"
+    "ttf-nerd-fonts-symbols-common" "Arquivos comuns Nerd Fonts Symbols" "repo"
+    "ttf-nerd-fonts-symbols-mono"   "Fonte mono Nerd Fonts Symbols" "repo"
+)
+
+echo
+info "============================================"
+info " Icon Themes & Fonts"
+info "============================================"
+echo "Digite os números separados por espaço/vírgula (ex: 1 3 5)"
+echo "'t' para selecionar todos | 'n' para pular"
+echo
+
+ICONS_VISIVEIS=()
+for i in "${!ICONS_FONTS[@]}"; do
+    if (( i % 3 == 0 )); then
+        ICONS_VISIVEIS+=("$i")
+    fi
+done
+
+ICONS_LIST=$(
+    n=1
+    for i in "${ICONS_VISIVEIS[@]}"; do
+        printf "[%2d] %-35s (%s)\n" "$n" "${ICONS_FONTS[i]}" "${ICONS_FONTS[i+2]}"
+        n=$(( n + 1 ))
+    done
+)
+echo "$ICONS_LIST" | pr -2 -t -w ${COLUMNS:-80}
+
+echo
+read -p "Escolha: " ICONS_ESCOLHA
+
+ICONS_SELECIONADOS=()
+if [ "$ICONS_ESCOLHA" == "t" ]; then
+    for i in "${ICONS_VISIVEIS[@]}"; do
+        ICONS_SELECIONADOS+=("${ICONS_FONTS[i]}")
+    done
+elif [ "$ICONS_ESCOLHA" != "n" ]; then
+    ICONS_ESCOLHA=$(echo "$ICONS_ESCOLHA" | tr ',' ' ' | tr -s ' ')
+    for num in $ICONS_ESCOLHA; do
+        idx=$(( num - 1 ))
+        if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#ICONS_VISIVEIS[@]}" ]; then
+            ICONS_SELECIONADOS+=("${ICONS_FONTS[${ICONS_VISIVEIS[idx]}]}")
+        fi
+    done
+fi
+
+if [ ${#ICONS_SELECIONADOS[@]} -gt 0 ]; then
+    info "Instalando icon themes e fonts..."
+    safe sudo pacman -S --needed --noconfirm "${ICONS_SELECIONADOS[@]}"
+else
+    info "Nenhum icon theme/font selecionado."
 fi
 
 echo
