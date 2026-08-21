@@ -31,6 +31,23 @@ if [ ! -x /opt/resolve/bin/resolve ]; then
 fi
 info "Resolve detectado em /opt/resolve"
 
+# --- 1.1 Isca de foco: exige zenity ou xterm ---
+if ! command -v zenity >/dev/null 2>&1 && ! command -v xterm >/dev/null 2>&1; then
+    warn "A isca de foco precisa de zenity ou xterm e nenhum está instalado."
+    read -r -p "Instalar zenity e xterm agora? [s/N] " RESPOSTA
+    case "$RESPOSTA" in
+        s|S|sim|SIM)
+            info "Instalando zenity e xterm..."
+            if ! sudo pacman -S --needed --noconfirm zenity xterm; then
+                warn "Falha na instalação. Instale manualmente: sudo pacman -S zenity xterm"
+            fi
+            ;;
+        *)
+            warn "Sem a isca, o Resolve pode fechar sozinho ao abrir em workspace vazia."
+            ;;
+    esac
+fi
+
 # --- 2. Wrapper ~/.local/bin/resolve ---
 WRAPPER="${HOME}/.local/bin/resolve"
 info "Criando wrapper ${WRAPPER}..."
@@ -101,6 +118,7 @@ decoy_open() {
     elif command -v xterm >/dev/null 2>&1; then
         xterm -geometry 60x3+0+0 -e sh -c 'sleep 300' >/dev/null 2>&1 &
     else
+        log "isca nao aberta: nem zenity nem xterm disponiveis"
         return 1
     fi
     sleep 1
