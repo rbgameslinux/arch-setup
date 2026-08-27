@@ -20,7 +20,7 @@ fi
 # --- 1. Instalar pacotes virt-manager/qemu ---
 info "Instalando pacotes virt-manager/qemu..."
 sudo pacman -S --needed --noconfirm \
-    virt-manager qemu-desktop ebtables iptables-nft \
+    virt-manager qemu-full ebtables iptables-nft \
     dnsmasq edk2-ovmf spice-vdagent virt-viewer
 
 # --- 2. Habilitar e iniciar libvirtd ---
