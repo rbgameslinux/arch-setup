@@ -114,7 +114,7 @@ if [ -f "$GRUB_FILE" ]; then
 
     CURRENT=$(grep "^GRUB_CMDLINE_LINUX_DEFAULT" "$GRUB_FILE" | sed 's/GRUB_CMDLINE_LINUX_DEFAULT="//;s/"$//')
 
-    NEW_PARAMS="quiet transparent_hugepage=madvise"
+    NEW_PARAMS="quiet"
 
     for param in $NEW_PARAMS; do
         if ! echo "$CURRENT" | grep -q "$param"; then
