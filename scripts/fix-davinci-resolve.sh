@@ -58,6 +58,7 @@ cat > "${WRAPPER}.tmp" << 'WRAPPER_EOF'
 ulimit -c 0
 unset QT_QPA_PLATFORM
 export QT_QPA_PLATFORM=xcb
+export QT_IM_MODULE=xim
 export QT_QPA_PLATFORMTHEME=default
 export QT_QPA_PLATFORM_PLUGIN_PATH=/opt/resolve/libs/plugins/platforms
 
@@ -70,11 +71,18 @@ fi
 
 log() { echo "[$(date "+%F %T")] $*" >> "$LOG"; }
 
-resolve_window_showing() {
+# Retorna o ID (niri) da janela PRINCIPAL do Resolve. Ignora a janela
+# secundária (título "resolve", marcada open-focused false no niri) e os
+# relatórios de crash — detectar a secundária fazia o watchdog fechar a isca
+# antes da principal ter foco, quebrando o teclado no popup de projeto novo.
+resolve_main_window_id() {
     niri msg windows 2>/dev/null | awk '
-        /^Window ID/ { title = "" }
+        /^Window ID/ { id = $3; sub(/:/, "", id); title = "" }
         /^  Title:/ { title = $0 }
-        /^  App ID: "resolve"/ && title != "" && title !~ /Relatório de Problemas/ && title !~ /Problem Report/ { found = 1; exit }
+        /^  App ID: "resolve"/ && title != "" && !found &&
+            title !~ /: "resolve"$/ &&
+            title !~ /Relatório de Problemas/ &&
+            title !~ /Problem Report/ { print id; found = 1 }
         END { exit found ? 0 : 1 }
     '
 }
@@ -104,40 +112,51 @@ workspace_has_window() {
 
 # Isca de foco: workspace vazio impede o Resolve (X11) de receber a ativação
 # inicial do xwayland-satellite/niri, e ele sai com código 0. Abrir qualquer
-# janela antes resolve — aqui abrimos uma mínima janela X11 (zenity/xterm) e
-# a fechamos assim que a janela principal do Resolve aparece.
+# janela antes resolve — aqui usamos um terminal kitty NATIVO do Wayland como
+# isca, pois uma janela X11 (zenity/xterm) quebra o foco de teclado do Resolve
+# quando é fechada. A isca é fechada graciosamente via niri assim que a janela
+# principal do Resolve aparece.
 DECOY_PID=""
+DECOY_ID=""
 DECOY_MARK="resolve-isca-$$"
 decoy_open() {
     if [ -n "$DECOY_PID" ] && kill -0 "$DECOY_PID" 2>/dev/null; then
         return 0
     fi
-    if command -v zenity >/dev/null 2>&1; then
-        env GDK_BACKEND=x11 zenity --info --title="$DECOY_MARK" \
-            --text="Iniciando DaVinci Resolve..." --width=280 >/dev/null 2>&1 &
+    if command -v kitty >/dev/null 2>&1; then
+        kitty --title="$DECOY_MARK" --class=Resolve-isca \
+            /bin/bash -c 'sleep 300' >/dev/null 2>&1 &
     elif command -v xterm >/dev/null 2>&1; then
-        xterm -geometry 60x3+0+0 -e sh -c 'sleep 300' >/dev/null 2>&1 &
+        xterm -geometry 60x3+0+0 -T "$DECOY_MARK" -e sh -c 'sleep 300' >/dev/null 2>&1 &
     else
-        log "isca nao aberta: nem zenity nem xterm disponiveis"
+        log "isca nao aberta: nem kitty nem xterm disponiveis"
         return 1
     fi
     sleep 1
-    # "$!" pode ser um subshell intermediário (VAR=x cmd &); resolve o PID real
-    REAL=$(pgrep -f "zenity.*${DECOY_MARK}" 2>/dev/null | head -1)
+    # Resolve o ID niri da isca (para fechamento gracioso) e o PID real.
+    DECOY_ID=$(niri msg windows 2>/dev/null | awk -v m="$DECOY_MARK" '
+        /^Window ID/ { id = $3; sub(/:/, "", id); title = "" }
+        /^  Title:/ { title = $0 }
+        title != "" && title ~ m && !found { print id; found = 1 }
+        END { exit found ? 0 : 1 }
+    ')
+    REAL=$(pgrep -f "$DECOY_MARK" 2>/dev/null | head -1)
     [ -n "$REAL" ] && DECOY_PID="$REAL" || DECOY_PID=$!
-    log "janela isca de foco aberta (pid $DECOY_PID)"
+    log "janela isca de foco aberta (pid $DECOY_PID, id ${DECOY_ID:-desconhecido})"
 }
 
 decoy_close() {
-    if [ -n "$DECOY_PID" ] || \
-       pgrep -f "$DECOY_MARK" >/dev/null 2>&1 || \
-       pgrep -f 'xterm .*-e sh -c sleep 300' >/dev/null 2>&1; then
-        pkill -f "$DECOY_MARK" 2>/dev/null
-        pkill -f 'xterm .*-e sh -c sleep 300' 2>/dev/null
-        [ -n "$DECOY_PID" ] && kill "$DECOY_PID" 2>/dev/null
-        log "janela isca de foco fechada"
+    if [ -n "$DECOY_ID" ]; then
+        niri msg action close-window "$DECOY_ID" 2>/dev/null
     fi
+    if [ -n "$DECOY_PID" ] && kill -0 "$DECOY_PID" 2>/dev/null; then
+        kill "$DECOY_PID" 2>/dev/null
+    fi
+    pkill -f "$DECOY_MARK" 2>/dev/null
+    pkill -f 'xterm .*-e sh -c sleep 300' 2>/dev/null
     DECOY_PID=""
+    DECOY_ID=""
+    log "janela isca de foco fechada"
 }
 
 WS=$(focused_workspace)
@@ -160,8 +179,8 @@ while [ "$attempt" -lt 3 ]; do
 
     elapsed=0
     found=0
-    while [ "$elapsed" -lt 20 ]; do
-        if resolve_window_showing; then
+    while [ "$elapsed" -lt 45 ]; do
+        if MAINWID=$(resolve_main_window_id); then
             found=1
             break
         fi
@@ -176,11 +195,21 @@ while [ "$attempt" -lt 3 ]; do
     done
 
     if [ "$found" -eq 1 ]; then
+        log "janela principal detectada no niri (PID $RPID, ID ${MAINWID:-desconhecido})"
+        if [ -n "$MAINWID" ]; then
+            niri msg action focus-window "$MAINWID" 2>/dev/null
+            log "foco forcado na janela principal (ID $MAINWID)"
+            sleep 1
+        fi
         decoy_close
-        log "janela detectada no niri (PID $RPID)"
+        start=$(date +%s)
         wait "$RPID"
         code=$?
-        log "resolve encerrou (codigo $code)"
+        elapsed_run=$(($(date +%s) - start))
+        log "resolve encerrou (codigo $code, ficou aberto ${elapsed_run}s)"
+        if [ "$elapsed_run" -lt 30 ]; then
+            log "AVISO: resolve fechou em menos de 30s; possivel crash/fechamento precoce"
+        fi
         exit $code
     fi
 
