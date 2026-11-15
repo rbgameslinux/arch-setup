@@ -377,7 +377,7 @@ PACOTES=(
     "celluloid"          "Reprodutor de vídeo GTK4 (frontend MPV)" "repo"
     "mpv"                "Reprodutor de vídeo via terminal" "repo"
     "vlc"                "Reprodutor de vídeo versátil" "repo"
-    "opencl-amd"         "Suporte OpenCL para GPU AMD" "aur"
+    "rocm-opencl-runtime" "Runtime OpenCL da ROCm (necessário p/ DaVinci Resolve)" "repo"
     "android-tools"      "Ferramentas ADB e Fastboot" "repo"
     "deckboard-bin"      "Controle remoto para PC via celular" "aur"
     "r-linux"            "Linguagem R para análise estatística" "aur"
