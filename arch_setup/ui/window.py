@@ -14,6 +14,7 @@ from arch_setup.backend.runner import (
 )
 from arch_setup.models.catalog import NAV_SECTIONS, NavSection, detect_environment_summary
 from arch_setup.ui.execution_dialog import ExecutionDialog
+from arch_setup.ui.pages.packages import PackagesPage
 
 
 class ArchSetupWindow(Adw.ApplicationWindow):
@@ -127,12 +128,11 @@ class ArchSetupWindow(Adw.ApplicationWindow):
         self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self._stack.add_named(self._build_overview_page(), "overview")
 
+        # ── Fase 2: Pós-formatação & Pacotes (real page) ──
+        self._packages_page = PackagesPage()
+        self._stack.add_named(self._packages_page, "packages")
+
         placeholders = {
-            "packages": (
-                "Pós-formatação & Pacotes",
-                "Fase 2: seleção de pacotes repo/AUR, helper AUR com SUDO_ASKPASS gráfico, AppImages e Icon Themes & Fonts.",
-                "system-software-install-symbolic",
-            ),
             "system": (
                 "Configurações do Sistema",
                 "Fase 3: switches individuais para /etc/environment, sysctl, limites de áudio, fstrim, timeout do systemd e GRUB.",
