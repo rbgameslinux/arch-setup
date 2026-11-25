@@ -242,6 +242,10 @@ class RunnerTests(unittest.TestCase):
 
 
 class UISmokeTests(unittest.TestCase):
+    @unittest.skipUnless(
+        bool(__import__("os").environ.get("DISPLAY") or __import__("os").environ.get("WAYLAND_DISPLAY")),
+        "Sem display gráfico disponível",
+    )
     def test_ui_imports_and_window_instantiation(self) -> None:
         from gi.repository import Adw, Gtk
 
