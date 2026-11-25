@@ -2,3 +2,5 @@
 /tmp/pos-formatacao-*.log
 /conversa.log
 /AGENTS.md
+__pycache__/
+*.py[cod]
