@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from arch_setup.backend import aur as aur_mod
 from arch_setup.backend import appimages as appimages_mod
+from arch_setup.backend.search import PackageResult
 from arch_setup.models.catalog import (
     OPTIONAL_PACKAGES,
     ICON_FONT_PACKAGES,
@@ -141,6 +142,139 @@ class CatalogPhase2Tests(unittest.TestCase):
     def test_categories_present(self) -> None:
         cats = {p.category for p in OPTIONAL_PACKAGES}
         self.assertTrue(len(cats) > 1, "Expected multiple categories")
+
+
+class PackagesUIRowsTests(unittest.TestCase):
+    @unittest.skipUnless(
+        bool(
+            __import__("os").environ.get("DISPLAY")
+            or __import__("os").environ.get("WAYLAND_DISPLAY")
+        ),
+        "Sem display gráfico disponível",
+    )
+    def test_categories_are_collapsible_expanders(self) -> None:
+        try:
+            import gi
+
+            gi.require_version("Gtk", "4.0")
+            gi.require_version("Adw", "1")
+            from gi.repository import Adw, Gtk
+
+            from arch_setup.ui.pages.packages import PackagesPage
+        except Exception:
+            self.skipTest("Sem display gráfico disponível neste ambiente")
+            return
+
+        if not Gtk.init_check():
+            self.skipTest("Sem display gráfico disponível neste ambiente")
+            return
+
+        Adw.init()
+        page = PackagesPage()
+        expected = len({p.category for p in OPTIONAL_PACKAGES}) + 1  # + ícones/fontes
+        self.assertEqual(len(page._expanders), expected)
+        self.assertTrue(
+            all(isinstance(row, Adw.ExpanderRow) for row in page._expanders.values())
+        )
+
+        first = page._rows[0]
+        first._check.set_active(True)
+        subtitle = page._expanders[first.item.category].get_subtitle()
+        self.assertIn("1 selecionado", subtitle)
+        total = sum(
+            1
+            for r in page._rows
+            if r.item.category == first.item.category and r.get_visible()
+        )
+        self.assertEqual(
+            page._counts[first.item.category].get_label(), f"1/{total}"
+        )
+        plan = page._build_plan()
+        self.assertIsNotNone(plan)
+        self.assertTrue(plan.stages)
+
+        page._aur_switch_row.set_active(True)
+        aur_row = next(r for r in page._rows if r.item.source == "aur")
+        self.assertTrue(aur_row.get_visible())
+
+    @unittest.skipUnless(
+        bool(
+            __import__("os").environ.get("DISPLAY")
+            or __import__("os").environ.get("WAYLAND_DISPLAY")
+        ),
+        "Sem display gráfico disponível",
+    )
+    def test_searched_repo_package_enters_plan_and_aur_needs_toggle(self) -> None:
+        try:
+            import gi
+
+            gi.require_version("Gtk", "4.0")
+            gi.require_version("Adw", "1")
+            from gi.repository import Adw, Gtk
+
+            from arch_setup.ui.pages.packages import PackagesPage
+        except Exception:
+            self.skipTest("Sem display gráfico disponível neste ambiente")
+            return
+
+        if not Gtk.init_check():
+            self.skipTest("Sem display gráfico disponível neste ambiente")
+            return
+
+        Adw.init()
+        page = PackagesPage()
+        self.assertFalse(page._results_group.get_visible())
+
+        page._render_results(
+            [
+                PackageResult("mpv", "Reprodutor repo", "repo", "extra"),
+                PackageResult("yay", "Helper AUR", "aur"),
+            ]
+        )
+        self.assertTrue(page._results_group.get_visible())
+        self.assertFalse(page._custom_rows["yay"].get_visible())
+
+        page._custom_rows["mpv"]._check.set_active(True)
+        # Selected packages are promoted to the top on the next render.
+        page._render_results(
+            [
+                PackageResult("gimp", "Editor repo", "repo", "extra"),
+                PackageResult("mpv", "Reprodutor repo", "repo", "extra"),
+            ]
+        )
+        self.assertEqual(
+            [row.item.name for row in page._rendered_rows], ["mpv", "gimp"]
+        )
+        self.assertIn("1 selecionado no topo", page._results_group.get_description())
+
+        # Clicking the clear ('x') button drops results but keeps selections.
+        page._searching = True
+        generation = page._search_generation
+        page._search_entry.set_text("")
+        page._search_entry.emit("search-changed")
+        self.assertFalse(page._searching)
+        self.assertGreater(page._search_generation, generation)
+        self.assertEqual(page._last_results, [])
+        self.assertEqual(
+            [row.item.name for row in page._rendered_rows], ["mpv"]
+        )
+        self.assertNotIn("resultado", page._results_group.get_description())
+
+        plan = page._build_plan()
+        self.assertIsNotNone(plan)
+        assert plan is not None
+        batch = plan.stages[0]
+        self.assertTrue(
+            any("mpv" in task.params.get("packages", []) for task in batch.tasks)
+        )
+
+        page._aur_switch_row.set_active(True)
+        self.assertTrue(page._custom_rows["yay"].get_visible())
+
+        # With nothing selected and an empty field, the results group hides.
+        page._custom_rows["mpv"]._check.set_active(False)
+        page._search_entry.emit("search-changed")
+        self.assertFalse(page._results_group.get_visible())
 
 
 if __name__ == "__main__":

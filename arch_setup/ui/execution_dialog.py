@@ -8,6 +8,7 @@ from typing import Callable
 from gi.repository import Adw, GLib, Gtk
 
 from arch_setup.backend.runner import CommandRunner, ExecutionPlan, RunnerCallbacks
+from arch_setup.ui import escape_label
 
 
 class ExecutionDialog(Adw.Dialog):
@@ -20,7 +21,7 @@ class ExecutionDialog(Adw.Dialog):
         self._on_complete: Callable[[bool], None] | None = None
         self._finished = False
 
-        self.set_title(plan.title)
+        self.set_title(escape_label(plan.title))
         self.set_content_width(760)
         self.set_content_height(540)
         self.set_can_close(False)
@@ -141,8 +142,10 @@ class ExecutionDialog(Adw.Dialog):
         respond: Callable[[bool], None],
     ) -> bool:
         alert = Adw.AlertDialog.new(
-            f"Falha em: {stage_title}",
-            f"{error_msg}\n\nDeseja continuar com as próximas etapas mesmo assim?",
+            escape_label(f"Falha em: {stage_title}"),
+            escape_label(
+                f"{error_msg}\n\nDeseja continuar com as próximas etapas mesmo assim?"
+            ),
         )
         alert.add_response("abort", "Abortar")
         alert.add_response("continue", "Continuar mesmo assim")

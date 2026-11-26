@@ -30,7 +30,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(len(catalog.BASE_PACKAGES), len(set(catalog.BASE_PACKAGES)))
         self.assertIn("base-devel", catalog.BASE_PACKAGES)
         self.assertIn("git", catalog.BASE_PACKAGES)
-        self.assertEqual(len(catalog.OPTIONAL_PACKAGES), 35)
+        self.assertEqual(len(catalog.OPTIONAL_PACKAGES), 38)
         self.assertEqual(len(catalog.ICON_FONT_PACKAGES), 5)
 
         obs = next(p for p in catalog.OPTIONAL_PACKAGES if p.name == "obs-studio")
@@ -85,7 +85,6 @@ class PrivilegedTests(unittest.TestCase):
                 {"action": "configure_audio_limits", "label": "Audio"},
                 {"action": "enable_fstrim", "label": "TRIM"},
                 {"action": "configure_systemd_timeout", "label": "Timeout"},
-                {"action": "configure_grub_quiet", "label": "GRUB"},
                 {"action": "setup_virt_manager", "label": "Virt"},
                 {"action": "setup_samba", "label": "Samba"},
                 {"action": "setup_cups", "label": "CUPS"},
@@ -248,6 +247,10 @@ class UISmokeTests(unittest.TestCase):
     )
     def test_ui_imports_and_window_instantiation(self) -> None:
         try:
+            import gi
+
+            gi.require_version("Gtk", "4.0")
+            gi.require_version("Adw", "1")
             from gi.repository import Adw, Gtk
             from arch_setup.main import ArchSetupApplication
             from arch_setup.ui.execution_dialog import ExecutionDialog
@@ -263,6 +266,10 @@ class UISmokeTests(unittest.TestCase):
         try:
             Adw.init()
             app = ArchSetupApplication()
+            try:
+                app.register(None)  # evita aviso de janela antes do startup
+            except Exception:
+                pass
             win = ArchSetupWindow(application=app)
             dlg = ExecutionDialog(ExecutionPlan(title="Smoke", stages=[]))
             self.assertIsNotNone(win)

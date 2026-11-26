@@ -197,7 +197,9 @@ def handle_pacman_install(params: dict[str, Any], *, dry_run: bool, **_: Any) ->
 def handle_configure_makepkg_jobs(
     params: dict[str, Any], *, dry_run: bool, **_: Any
 ) -> None:
-    cores = params.get("cores") or (os.cpu_count() or 1)
+    process_count = getattr(os, "process_cpu_count", None)
+    fallback = int(process_count() or 0) if callable(process_count) else 0
+    cores = params.get("cores") or fallback or (os.cpu_count() or 1)
     if not isinstance(cores, int) or cores < 1 or cores > 1024:
         raise PrivilegedError(f"Número de núcleos inválido: {cores!r}")
 
@@ -207,7 +209,19 @@ def handle_configure_makepkg_jobs(
         log_info(f"[dry-run] Atualizaria MAKEFLAGS para -j{cores} em {makepkg_conf}")
         return
 
-    text = makepkg_conf.read_text(encoding="utf-8")
+    try:
+        text = makepkg_conf.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+        log_warn(f"{makepkg_conf} não encontrado; o arquivo será criado")
+
+    bak = makepkg_conf.with_suffix(".conf.bak")
+    try:
+        shutil.copy2(makepkg_conf, bak)
+        log_info(f"Backup criado: {bak}")
+    except OSError:
+        log_warn(f"Não foi possível criar backup de {makepkg_conf}")
+
     pattern = re.compile(r'^#?MAKEFLAGS="-j[0-9]*"', re.MULTILINE)
     replacement = f'MAKEFLAGS="-j{cores}"'
     if pattern.search(text):
@@ -307,47 +321,6 @@ def handle_configure_systemd_timeout(
         log_info("DefaultTimeoutStopSec=10s aplicado")
 
 
-def handle_configure_grub_quiet(
-    _params: dict[str, Any], *, dry_run: bool, **_: Any
-) -> None:
-    grub_file = Path("/etc/default/grub")
-    log_info("Configurando parâmetro 'quiet' no GRUB...")
-    if not grub_file.exists():
-        log_warn(f"{grub_file} não encontrado. Bootloader pode não ser GRUB.")
-        return
-    if dry_run:
-        log_info("[dry-run] Atualizaria GRUB_CMDLINE_LINUX_DEFAULT com 'quiet' e regeneraria grub.cfg")
-        return
-
-    bak_file = Path("/etc/default/grub.bak")
-    shutil.copy2(grub_file, bak_file)
-    log_info(f"Backup criado: {bak_file}")
-
-    text = grub_file.read_text(encoding="utf-8")
-    match = re.search(r'^GRUB_CMDLINE_LINUX_DEFAULT="(.*)"$', text, re.MULTILINE)
-    if not match:
-        log_warn("GRUB_CMDLINE_LINUX_DEFAULT não encontrado em /etc/default/grub")
-    else:
-        tokens = match.group(1).split()
-        if "quiet" in tokens:
-            log_warn("Parâmetro já presente: quiet")
-        else:
-            tokens.append("quiet")
-            new_line = f'GRUB_CMDLINE_LINUX_DEFAULT="{" ".join(tokens)}"'
-            text = (
-                text[: match.start()] + new_line + text[match.end() :]
-            )
-            grub_file.write_text(text, encoding="utf-8")
-            log_info("Adicionado: quiet")
-
-    if shutil.which("grub-mkconfig"):
-        run_cmd(["grub-mkconfig", "-o", "/boot/grub/grub.cfg"], dry_run=dry_run)
-    elif shutil.which("grub2-mkconfig"):
-        run_cmd(["grub2-mkconfig", "-o", "/boot/grub2/grub.cfg"], dry_run=dry_run)
-    else:
-        log_warn("grub-mkconfig não encontrado. Gere manualmente.")
-
-
 def handle_setup_virt_manager(
     _params: dict[str, Any], *, target_user: str | None, dry_run: bool, **_: Any
 ) -> None:
@@ -398,9 +371,12 @@ def handle_setup_samba(
     else:
         usershares.mkdir(parents=True, exist_ok=True)
         run_cmd(["groupadd", "-r", "sambashares"], dry_run=False, check=False, stream=False)
-        sambashares_gid = grp.getgrnam("sambashares").gr_gid
-        os.chown(usershares, 0, sambashares_gid)
-        os.chmod(usershares, 0o1770)
+        try:
+            sambashares_gid = grp.getgrnam("sambashares").gr_gid
+            os.chown(usershares, 0, sambashares_gid)
+            os.chmod(usershares, 0o1770)
+        except KeyError:
+            log_warn("Grupo sambashares não encontrado; ajuste permissões manualmente")
 
         smb_conf = Path("/etc/samba/smb.conf")
         smb_bak = Path("/etc/samba/smb.conf.bak")
@@ -443,8 +419,8 @@ def handle_setup_samba(
         ensure_user_in_group(target_user, "sambashares", dry_run=dry_run)
 
     for svc in ("smb.service", "nmb.service"):
-        run_cmd(["systemctl", "enable", svc], dry_run=dry_run, stream=False)
         run_cmd(["systemctl", "restart", svc], dry_run=dry_run, stream=False)
+        run_cmd(["systemctl", "enable", svc], dry_run=dry_run, stream=False)
     log_info("Samba configurado com sucesso")
 
 
@@ -459,7 +435,9 @@ def handle_setup_cups(_params: dict[str, Any], *, dry_run: bool, **_: Any) -> No
         log_info("[dry-run] Verificaria mdns_minimal em /etc/nsswitch.conf")
     elif nsswitch.exists():
         content = nsswitch.read_text(encoding="utf-8")
-        if "mdns" not in content:
+        if "mdns" in content:
+            log_warn("mDNS já configurado em /etc/nsswitch.conf")
+        elif re.search(r"^hosts:.*$", content, re.MULTILINE):
             new_content = re.sub(
                 r"^hosts:.*$",
                 "hosts: files mdns_minimal [NOTFOUND=return] dns",
@@ -469,7 +447,7 @@ def handle_setup_cups(_params: dict[str, Any], *, dry_run: bool, **_: Any) -> No
             nsswitch.write_text(new_content, encoding="utf-8")
             log_info("mDNS configurado em /etc/nsswitch.conf")
         else:
-            log_warn("mDNS já configurado em /etc/nsswitch.conf")
+            log_warn("Linha 'hosts:' não encontrada em /etc/nsswitch.conf")
 
 
 def handle_noop_check(params: dict[str, Any], *, dry_run: bool, **_: Any) -> None:
@@ -485,7 +463,6 @@ TASK_HANDLERS = {
     "configure_audio_limits": handle_configure_audio_limits,
     "enable_fstrim": handle_enable_fstrim,
     "configure_systemd_timeout": handle_configure_systemd_timeout,
-    "configure_grub_quiet": handle_configure_grub_quiet,
     "setup_virt_manager": handle_setup_virt_manager,
     "setup_samba": handle_setup_samba,
     "setup_cups": handle_setup_cups,

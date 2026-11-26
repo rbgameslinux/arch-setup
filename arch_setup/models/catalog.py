@@ -73,7 +73,7 @@ NAV_SECTIONS: tuple[NavSection, ...] = (
     NavSection(
         key="system",
         title="Sistema",
-        subtitle="Env, sysctl, áudio, TRIM e GRUB",
+        subtitle="Env, sysctl, áudio e TRIM",
         icon_name="preferences-system-symbolic",
     ),
     NavSection(
@@ -158,6 +158,27 @@ OPTIONAL_PACKAGES: tuple[PackageItem, ...] = (
         "appimage",
         "Jogos",
         appimage_bin="ProtonUp-Qt.AppImage",
+    ),
+    PackageItem(
+        "nexus-launcher",
+        "Launcher de jogos Xodus (Nexus)",
+        "appimage",
+        "Jogos",
+        appimage_bin="Nexus-Launcher.AppImage",
+    ),
+    PackageItem(
+        "recomp-launcher",
+        "Launcher de PC recomps",
+        "appimage",
+        "Jogos",
+        appimage_bin="RecompLauncher.AppImage",
+    ),
+    PackageItem(
+        "epic-games-launcher",
+        "Launcher oficial da Epic Games",
+        "appimage",
+        "Jogos",
+        appimage_bin="EpicGamesLauncher.AppImage",
     ),
     PackageItem("visual-studio-code-bin", "Editor de código Microsoft", "aur", "Desenvolvimento"),
     PackageItem("ventoy", "Criar USB bootável múltipla", "repo", "Utilitários"),
@@ -244,11 +265,6 @@ SYSTEM_TWEAKS: tuple[TweakItem, ...] = (
         title="Reduzir timeout ao desligar",
         description="Define DefaultTimeoutStopSec=10s em /etc/systemd/system.conf",
     ),
-    TweakItem(
-        key="grub_quiet",
-        title="Parâmetro quiet no GRUB",
-        description="Adiciona 'quiet' ao GRUB_CMDLINE_LINUX_DEFAULT e regenera o grub.cfg",
-    ),
 )
 
 
@@ -289,6 +305,16 @@ SERVICE_BLOCKS: tuple[ServiceBlock, ...] = (
 )
 
 
+def detect_cpu_cores() -> int:
+    """Return the CPUs available to this process (equivalente a `nproc`)."""
+    process_count = getattr(os, "process_cpu_count", None)
+    if callable(process_count):
+        detected = process_count()
+        if detected:
+            return int(detected)
+    return int(os.cpu_count() or 1)
+
+
 def get_installed_pacman_packages() -> set[str]:
     """Return the set of locally installed package names via `pacman -Qq`."""
     if not shutil.which("pacman"):
@@ -322,7 +348,7 @@ def detect_environment_summary() -> dict[str, object]:
     base_installed = sum(1 for pkg in BASE_PACKAGES if pkg in installed)
     local_bin = Path.home() / ".local" / "bin"
     return {
-        "cpu_cores": os.cpu_count() or 1,
+        "cpu_cores": detect_cpu_cores(),
         "aur_helper": detect_aur_helper(),
         "total_installed_packages": len(installed),
         "base_installed_count": base_installed,

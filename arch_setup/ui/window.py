@@ -14,7 +14,11 @@ from arch_setup.backend.runner import (
 )
 from arch_setup.models.catalog import NAV_SECTIONS, NavSection, detect_environment_summary
 from arch_setup.ui.execution_dialog import ExecutionDialog
+from arch_setup.ui.pages.fixes import FixesPage
 from arch_setup.ui.pages.packages import PackagesPage
+from arch_setup.ui.pages.services import ServicesPage
+from arch_setup.ui.pages.system import SystemPage
+from arch_setup.ui.pages.wallpapers import WallpapersPage
 
 
 class ArchSetupWindow(Adw.ApplicationWindow):
@@ -118,8 +122,8 @@ class ArchSetupWindow(Adw.ApplicationWindow):
         self._content_header = Adw.HeaderBar()
 
         self._refresh_button = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
-        self._refresh_button.set_tooltip_text("Atualizar detecção do sistema")
-        self._refresh_button.connect("clicked", lambda *_: self._refresh_overview())
+        self._refresh_button.set_tooltip_text("Atualizar detecção desta página")
+        self._refresh_button.connect("clicked", lambda *_: self._refresh_current_page())
         self._content_header.pack_end(self._refresh_button)
 
         toolbar.add_top_bar(self._content_header)
@@ -128,39 +132,16 @@ class ArchSetupWindow(Adw.ApplicationWindow):
         self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self._stack.add_named(self._build_overview_page(), "overview")
 
-        # ── Fase 2: Pós-formatação & Pacotes (real page) ──
-        self._packages_page = PackagesPage()
-        self._stack.add_named(self._packages_page, "packages")
-
-        placeholders = {
-            "system": (
-                "Configurações do Sistema",
-                "Fase 3: switches individuais para /etc/environment, sysctl, limites de áudio, fstrim, timeout do systemd e GRUB.",
-                "preferences-system-symbolic",
-            ),
-            "services": (
-                "Serviços (Virt-Manager, Samba, CUPS)",
-                "Fase 3: seleção por bloco de serviços de virtualização, compartilhamento Samba e impressão CUPS/Avahi.",
-                "network-server-symbolic",
-            ),
-            "fixes": (
-                "Correções (ZapZap & DaVinci Resolve)",
-                "Fase 4: regra PipeWire para microfone do ZapZap e wrapper/niri para DaVinci Resolve com seletor de monitor.",
-                "applications-engineering-symbolic",
-            ),
-            "wallpapers": (
-                "Wallpapers Rbgames",
-                "Fase 4: download (~1.2 GB) e extração da coleção para ~/Wallpapers com barra de progresso.",
-                "preferences-desktop-wallpaper-symbolic",
-            ),
+        # ── Páginas funcionais ──
+        self._pages: dict[str, Adw.PreferencesPage] = {
+            "packages": PackagesPage(),
+            "system": SystemPage(),
+            "services": ServicesPage(),
+            "fixes": FixesPage(),
+            "wallpapers": WallpapersPage(),
         }
-
-        for key, (title, desc, icon_name) in placeholders.items():
-            status = Adw.StatusPage()
-            status.set_icon_name(icon_name)
-            status.set_title(title)
-            status.set_description(desc)
-            self._stack.add_named(status, key)
+        for key, page in self._pages.items():
+            self._stack.add_named(page, key)
 
         toolbar.set_content(self._stack)
         self._content_page = Adw.NavigationPage.new(toolbar, "Visão Geral")
@@ -170,7 +151,7 @@ class ArchSetupWindow(Adw.ApplicationWindow):
         prefs_page = Adw.PreferencesPage()
 
         hero_group = Adw.PreferencesGroup(
-            title="Fundação do App Gráfico (Fase 1)",
+            title="Teste do motor de execução",
             description=(
                 "Ambiente detectado automaticamente. Use o botão de teste para validar "
                 "o worker privilegiado (dry-run), barra de progresso e log ao vivo."
@@ -205,18 +186,6 @@ class ArchSetupWindow(Adw.ApplicationWindow):
             sys_group.add(row)
         prefs_page.add(sys_group)
 
-        roadmap_group = Adw.PreferencesGroup(title="Roadmap da migração")
-        phases = (
-            ("Fase 1 — Fundação", "run.sh, janela GTK4/Libadwaita, catálogo, runner e worker pkexec (pronta)"),
-            ("Fase 2 — Pós-formatação & AppImages", "Página de pacotes, AUR + askpass gráfico, AppImages e fontes"),
-            ("Fase 3 — Sistema & Serviços", "Páginas config-system e Virt-Manager / Samba / CUPS"),
-            ("Fase 4 — Fixes & Wallpapers", "Correções ZapZap/DaVinci com seletor de monitor e wallpapers"),
-            ("Fase 5 — Acabamento", "Atalho .desktop sem terminal, testes finais e README.md"),
-        )
-        for title, subtitle in phases:
-            roadmap_group.add(Adw.ActionRow(title=title, subtitle=subtitle))
-        prefs_page.add(roadmap_group)
-
         return prefs_page
 
     def _refresh_overview(self) -> None:
@@ -231,7 +200,7 @@ class ArchSetupWindow(Adw.ApplicationWindow):
             f"{cores} thread(s) detectadas (MAKEFLAGS=\"-j{cores}\")"
         )
         self._overview_rows["aur"].set_subtitle(
-            f"Encontrado: {aur}" if aur else "Nenhum instalado (paru/yay será oferecido na Fase 2)"
+            f"Encontrado: {aur}" if aur else "Nenhum instalado (paru/yay na página Pós-formatação)"
         )
         self._overview_rows["base_pkgs"].set_subtitle(
             f"{base_ok} de {base_total} pacotes base instalados ({total_pkgs} pacotes no sistema)"
@@ -273,9 +242,20 @@ class ArchSetupWindow(Adw.ApplicationWindow):
         self._stack.set_visible_child_name(key)
         if section is not None:
             self._content_page.set_title(section.title)
-        self._refresh_button.set_visible(key == "overview")
+        self._refresh_button.set_visible(True)
         if self._split_view.get_collapsed():
             self._split_view.set_show_content(True)
+
+    def _refresh_current_page(self) -> None:
+        """Re-run the environment detection of the currently visible page."""
+        key = self._stack.get_visible_child_name()
+        if key == "overview":
+            self._refresh_overview()
+            return
+        page = self._pages.get(key or "")
+        refresh = getattr(page, "_refresh_state", None)
+        if callable(refresh):
+            refresh()
 
     def _on_run_foundation_test(self, _button: Gtk.Button) -> None:
         summary = detect_environment_summary()
