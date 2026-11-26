@@ -61,9 +61,3 @@ comportamento/formato** (GSettings, `.desktop`, `.icons/`, `gearlever.conf`),
 sem cópia de código-fonte do projeto Gear Lever, que também é GPL-3.0. Os
 AppImages instalados e os wallpapers baixados mantêm as licenças dos seus
 respectivos autores.
-
-## Privacidade
-
-`conversa.log` e quaisquer logs/sessões são privados e estão no `.gitignore`.
-Antes de qualquer commit, verificar `git status` para garantir que nenhum
-arquivo privado será incluído.
