@@ -31,7 +31,7 @@ class Phase5Tests(unittest.TestCase):
             "pkexec",
             "## Como usar",
             "## O que ele faz",
-            "86 testes automatizados",
+            "87 testes automatizados",
             "GNU General Public License",
         ):
             self.assertIn(expected, readme)

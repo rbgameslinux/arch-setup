@@ -342,6 +342,61 @@ def detect_aur_helper() -> str | None:
     return None
 
 
+COMPOSITOR_PROCESSES = {
+    "niri": "niri",
+    "hyprland": "Hyprland",
+    "sway": "sway",
+    "wayfire": "Wayfire",
+    "labwc": "labwc",
+    "river": "river",
+    "mutter": "Mutter (GNOME)",
+    "gnome-shell": "GNOME Shell",
+    "kwin_wayland": "KWin (Wayland)",
+    "kwin_x11": "KWin (X11)",
+    "weston": "Weston",
+}
+
+DESKTOP_HINTS = {
+    "kde": "KDE Plasma",
+    "plasma": "KDE Plasma",
+    "gnome": "GNOME (Mutter)",
+    "hyprland": "Hyprland",
+    "niri": "niri",
+    "sway": "sway",
+    "xfce": "Xfce",
+    "cinnamon": "Cinnamon",
+}
+
+
+def detect_compositor() -> str:
+    """Identifica o compositor em execução (processo) ou o desktop da sessão."""
+    try:
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                comm = entry.joinpath("comm").read_text(
+                    encoding="utf-8", errors="replace"
+                ).strip().lower()
+            except OSError:
+                continue
+            label = COMPOSITOR_PROCESSES.get(comm)
+            if label:
+                return label
+    except OSError:
+        pass
+
+    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+    for hint, label in DESKTOP_HINTS.items():
+        if hint in desktop:
+            return label
+
+    session = os.environ.get("XDG_SESSION_TYPE")
+    if session:
+        return f"Sessão {session} (compositor não identificado)"
+    return "Não detectado"
+
+
 def detect_environment_summary() -> dict[str, object]:
     """Collect lightweight system state for the overview and pages."""
     installed = get_installed_pacman_packages()
@@ -354,6 +409,7 @@ def detect_environment_summary() -> dict[str, object]:
         "base_installed_count": base_installed,
         "base_total_count": len(BASE_PACKAGES),
         "has_niri": shutil.which("niri") is not None,
+        "compositor": detect_compositor(),
         "has_resolve": os.access("/opt/resolve/bin/resolve", os.X_OK),
         "has_resolve_wrapper": (local_bin / "resolve").is_file(),
         "has_zapzap_fix": (

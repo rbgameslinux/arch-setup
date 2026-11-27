@@ -5,15 +5,7 @@ from __future__ import annotations
 from gi.repository import Adw, Gio, Gtk
 
 from arch_setup import APP_NAME
-from arch_setup.backend.runner import (
-    ExecutionPlan,
-    PrivilegedBatch,
-    PrivilegedTask,
-    TaskLogger,
-    UserStep,
-)
 from arch_setup.models.catalog import NAV_SECTIONS, NavSection, detect_environment_summary
-from arch_setup.ui.execution_dialog import ExecutionDialog
 from arch_setup.ui.pages.fixes import FixesPage
 from arch_setup.ui.pages.packages import PackagesPage
 from arch_setup.ui.pages.services import ServicesPage
@@ -150,32 +142,14 @@ class ArchSetupWindow(Adw.ApplicationWindow):
     def _build_overview_page(self) -> Gtk.Widget:
         prefs_page = Adw.PreferencesPage()
 
-        hero_group = Adw.PreferencesGroup(
-            title="Teste do motor de execução",
-            description=(
-                "Ambiente detectado automaticamente. Use o botão de teste para validar "
-                "o worker privilegiado (dry-run), barra de progresso e log ao vivo."
-            ),
-        )
-
-        test_row = Adw.ActionRow(
-            title="Testar motor de execução (Dry-Run)",
-            subtitle="Simula lote privilegiado + etapa de usuário sem alterar o sistema",
-        )
-        test_btn = Gtk.Button(label="Executar teste")
-        test_btn.add_css_class("suggested-action")
-        test_btn.set_valign(Gtk.Align.CENTER)
-        test_btn.connect("clicked", self._on_run_foundation_test)
-        test_row.add_suffix(test_btn)
-        hero_group.add(test_row)
-        prefs_page.add(hero_group)
-
+        # A detecção do ambiente roda automaticamente na abertura da janela;
+        # por isso não há mais um botão de teste visível aqui.
         sys_group = Adw.PreferencesGroup(title="Estado detectado do sistema")
         row_defs = (
             ("cpu", "Processador (MAKEFLAGS)", "Detectando..."),
             ("aur", "Helper AUR", "Detectando..."),
             ("base_pkgs", "Pacotes base de pós-formatação", "Detectando..."),
-            ("niri", "Compositor Wayland (niri)", "Detectando..."),
+            ("compositor", "Compositor", "Detectando..."),
             ("resolve", "DaVinci Resolve", "Detectando..."),
             ("zapzap_fix", "Fix Microfone ZapZap", "Detectando..."),
             ("wallpapers", "Pasta ~/Wallpapers", "Detectando..."),
@@ -205,9 +179,7 @@ class ArchSetupWindow(Adw.ApplicationWindow):
         self._overview_rows["base_pkgs"].set_subtitle(
             f"{base_ok} de {base_total} pacotes base instalados ({total_pkgs} pacotes no sistema)"
         )
-        self._overview_rows["niri"].set_subtitle(
-            "Instalado no PATH" if summary["has_niri"] else "Não detectado"
-        )
+        self._overview_rows["compositor"].set_subtitle(str(summary["compositor"]))
 
         if summary["has_resolve"]:
             wrapper_msg = (
@@ -256,46 +228,3 @@ class ArchSetupWindow(Adw.ApplicationWindow):
         refresh = getattr(page, "_refresh_state", None)
         if callable(refresh):
             refresh()
-
-    def _on_run_foundation_test(self, _button: Gtk.Button) -> None:
-        summary = detect_environment_summary()
-        cores = int(summary["cpu_cores"])  # type: ignore[arg-type]
-
-        def _user_check(logger: TaskLogger) -> None:
-            logger.info("Validando etapa em espaço de usuário...")
-            logger.set_progress(0.75, "Verificando comandos locais")
-            logger.run_command(["uname", "-srm"])
-            logger.info("Etapa de usuário concluída.")
-
-        plan = ExecutionPlan(
-            title="Teste de Fundação (Dry-Run)",
-            stages=[
-                PrivilegedBatch(
-                    title="Simulação do worker privilegiado",
-                    dry_run=True,
-                    tasks=[
-                        PrivilegedTask(
-                            action="noop_check",
-                            label="Validando manifesto JSON do worker",
-                            params={"message": "Manifesto válido"},
-                        ),
-                        PrivilegedTask(
-                            action="configure_makepkg_jobs",
-                            label=f"Simulando MAKEFLAGS=-j{cores}",
-                            params={"cores": cores},
-                        ),
-                        PrivilegedTask(
-                            action="configure_env",
-                            label="Simulando configuração de /etc/environment",
-                        ),
-                    ],
-                ),
-                UserStep(
-                    title="Verificação em espaço de usuário",
-                    fn=_user_check,
-                ),
-            ],
-        )
-
-        dialog = ExecutionDialog(plan)
-        dialog.start(self, on_complete=lambda _ok: self._refresh_overview())

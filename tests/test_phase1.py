@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import getpass
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from gi.repository import GLib
 
@@ -45,12 +47,20 @@ class CatalogTests(unittest.TestCase):
             "base_installed_count",
             "base_total_count",
             "has_niri",
+            "compositor",
             "has_resolve",
             "has_resolve_wrapper",
             "has_zapzap_fix",
             "has_wallpapers",
         ):
             self.assertIn(key, summary)
+
+    def test_compositor_falls_back_to_desktop_hint(self) -> None:
+        with (
+            patch.object(catalog.Path, "iterdir", side_effect=OSError),
+            patch.dict(os.environ, {"XDG_CURRENT_DESKTOP": "KDE", "XDG_SESSION_TYPE": ""}),
+        ):
+            self.assertEqual(catalog.detect_compositor(), "KDE Plasma")
 
 
 class PrivilegedTests(unittest.TestCase):
