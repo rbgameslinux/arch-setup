@@ -418,6 +418,56 @@ def _version_from_url(url: str) -> str:
     return match.group(1) if match else ""
 
 
+def _gearlever_prefix(display: str) -> str:
+    """Nome base usado nos arquivos .desktop/.appimage do Gear Lever."""
+    return _gearlever_filename(display).removesuffix(".appimage")
+
+
+def _installed_appimage_files(folder: Path, prefix: str) -> list[Path]:
+    return sorted(p for p in folder.glob(f"{prefix}*.appimage") if p.is_file())
+
+
+def _installed_version(prefix: str) -> str:
+    desktop = APP_DIR / f"{prefix}.desktop"
+    if not desktop.is_file():
+        return ""
+    return _parse_desktop_entry(desktop).get("X-AppImage-Version", "").strip()
+
+
+def _skip_installed_version(
+    prefix: str, version: str, logger: TaskLogger, *, use_gearlever: bool
+) -> bool:
+    """Evita baixar novamente quando a mesma versão já está instalada."""
+    if not use_gearlever or not version:
+        return False
+    folder = gearlever_mod.appimages_dir(logger)
+    if not _installed_appimage_files(folder, prefix):
+        return False
+    current = _installed_version(prefix)
+    if current and current == version.strip():
+        logger.info(f"{prefix}: versão {version} já instalada; pulando download.")
+        return True
+    return False
+
+
+def _cleanup_stale_gearlever(
+    folder: Path, prefix: str, keep: Path, logger: TaskLogger
+) -> None:
+    """Remove versões antigas para não acumular AppImages/.desktop/ícones."""
+    canonical_desktop = APP_DIR / f"{prefix}.desktop"
+    for stale in _installed_appimage_files(folder, prefix):
+        if stale.resolve() != keep.resolve():
+            stale.unlink(missing_ok=True)
+            gearlever_mod.forget_installed(stale)
+    for stale in APP_DIR.glob(f"{prefix}*.desktop"):
+        if stale.resolve() != canonical_desktop.resolve():
+            stale.unlink(missing_ok=True)
+    icons = gearlever_mod.icons_dir(logger)
+    for pattern in (f"{prefix}*.png", f"{prefix}*.svg"):
+        for stale in icons.glob(pattern):
+            stale.unlink(missing_ok=True)
+
+
 def _write_full_desktop(
     target: Path,
     prefix: str,
@@ -472,7 +522,22 @@ def _gearlever_finalize(
     final_version = version or (meta.version if meta else "")
     folder = gearlever_mod.appimages_dir(logger)
     folder.mkdir(parents=True, exist_ok=True)
-    target = _unique_target(folder, _gearlever_filename(display), final_version)
+    prefix = _gearlever_prefix(display)
+    existing = _installed_appimage_files(folder, prefix)
+    installed_version = _installed_version(prefix)
+
+    if (
+        existing
+        and installed_version
+        and final_version
+        and installed_version == final_version.strip()
+    ):
+        keep = existing[0]
+        _cleanup_stale_gearlever(folder, prefix, keep, logger)
+        logger.info(f"{display} {final_version} já instalado em {keep}; nada a fazer.")
+        return keep
+
+    target = folder / f"{prefix}.appimage"
     try:
         if source.resolve() != target.resolve():
             shutil.copy2(source, target)
@@ -481,7 +546,7 @@ def _gearlever_finalize(
         logger.warn(f"Falha ao copiar {name} para {target}: {exc}")
         return None
 
-    prefix = target.stem
+    _cleanup_stale_gearlever(folder, prefix, target, logger)
     icon = _gearlever_icon(source, prefix, logger) or "applications-other"
 
     effective_meta = meta or AppImageMetadata(
@@ -620,9 +685,18 @@ def install_heroic(logger: TaskLogger, *, use_gearlever: bool = False) -> bool:
             return False
         appimage_name = Path(match.group(1).strip()).name
         url = f"https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/latest/download/{appimage_name}"
+        version = _version_from_url(appimage_name)
     except Exception as exc:
         logger.warn(f"Falha ao obter metadados do Heroic: {exc}")
         return False
+
+    if _skip_installed_version(
+        _gearlever_prefix("Heroic Games Launcher"),
+        version,
+        logger,
+        use_gearlever=use_gearlever,
+    ):
+        return True
 
     dest = _dest_for("Heroic.AppImage", use_gearlever=use_gearlever, logger=logger)
     logger.set_progress(0.1, "Heroic: baixando...")
@@ -641,7 +715,7 @@ def install_heroic(logger: TaskLogger, *, use_gearlever: bool = False) -> bool:
         icon_name="heroic",
         categories="Game;Utility;",
         wm_class="heroic",
-        version=_version_from_url(appimage_name),
+        version=version,
     )
 
 
@@ -651,6 +725,12 @@ def install_zapzap(logger: TaskLogger, *, use_gearlever: bool = False) -> bool:
     url = _github_latest_appimage("rafatosta/zapzap", r"linux-x86_64\.AppImage", logger)
     if not url:
         return False
+
+    version = _version_from_url(url)
+    if _skip_installed_version(
+        _gearlever_prefix("ZapZap"), version, logger, use_gearlever=use_gearlever
+    ):
+        return True
 
     dest = _dest_for("ZapZap.AppImage", use_gearlever=use_gearlever, logger=logger)
     logger.set_progress(0.1, "ZapZap: baixando...")
@@ -669,7 +749,7 @@ def install_zapzap(logger: TaskLogger, *, use_gearlever: bool = False) -> bool:
         icon_name="zapzap",
         categories="Network;InstantMessaging;",
         wm_class="zapzap",
-        version=_version_from_url(url),
+        version=version,
     )
 
 
@@ -679,6 +759,12 @@ def install_protonup_qt(logger: TaskLogger, *, use_gearlever: bool = False) -> b
     url = _github_latest_appimage("DavidoTek/ProtonUp-Qt", r"x86_64\.AppImage", logger)
     if not url:
         return False
+
+    version = _version_from_url(url)
+    if _skip_installed_version(
+        _gearlever_prefix("ProtonUp-Qt"), version, logger, use_gearlever=use_gearlever
+    ):
+        return True
 
     dest = _dest_for("ProtonUp-Qt.AppImage", use_gearlever=use_gearlever, logger=logger)
     logger.set_progress(0.1, "ProtonUp-Qt: baixando...")
@@ -697,7 +783,7 @@ def install_protonup_qt(logger: TaskLogger, *, use_gearlever: bool = False) -> b
         icon_name="protonup-qt",
         categories="Utility;",
         wm_class="protonup-qt",
-        version=_version_from_url(url),
+        version=version,
     )
 
 
@@ -711,6 +797,15 @@ def install_nexus_launcher(logger: TaskLogger, *, use_gearlever: bool = False) -
     )
     if not url:
         return False
+
+    version = _version_from_url(url)
+    if _skip_installed_version(
+        _gearlever_prefix("Nexus Launcher"),
+        version,
+        logger,
+        use_gearlever=use_gearlever,
+    ):
+        return True
 
     dest = _dest_for(
         "Nexus-Launcher.AppImage", use_gearlever=use_gearlever, logger=logger
@@ -731,7 +826,7 @@ def install_nexus_launcher(logger: TaskLogger, *, use_gearlever: bool = False) -
         icon_name="nexus-launcher",
         categories="Game;Utility;",
         wm_class="nexus-launcher",
-        version=_version_from_url(url),
+        version=version,
     )
 
 
@@ -750,6 +845,15 @@ def install_recomp_launcher(logger: TaskLogger, *, use_gearlever: bool = False) 
     )
     if not url:
         return False
+
+    version = _version_from_url(url)
+    if _skip_installed_version(
+        _gearlever_prefix("RecompLauncher"),
+        version,
+        logger,
+        use_gearlever=use_gearlever,
+    ):
+        return True
 
     dest = _dest_for(
         "RecompLauncher.AppImage", use_gearlever=use_gearlever, logger=logger
@@ -770,7 +874,7 @@ def install_recomp_launcher(logger: TaskLogger, *, use_gearlever: bool = False) 
         icon_name="recomp-launcher",
         categories="Game;Utility;",
         wm_class="recomp-launcher",
-        version=_version_from_url(url),
+        version=version,
     )
 
 

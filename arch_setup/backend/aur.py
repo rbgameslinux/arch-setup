@@ -25,6 +25,12 @@ def _build_env_with_askpass() -> dict[str, str]:
     """Return an env copy that sets SUDO_ASKPASS to our GTK4 dialog."""
     env = os.environ.copy()
     if ASKPASS_SCRIPT.is_file():
+        # ZIPs e clones podem perder o bit de execução; o sudo exige um
+        # SUDO_ASKPASS executável, senão falha antes de abrir a janela.
+        try:
+            ASKPASS_SCRIPT.chmod(ASKPASS_SCRIPT.stat().st_mode | 0o111)
+        except OSError:
+            pass
         env["SUDO_ASKPASS"] = str(ASKPASS_SCRIPT)
     return env
 
@@ -36,8 +42,8 @@ def install_aur_helper(
 ) -> str | None:
     """Clone and build the chosen AUR helper via makepkg -si.
 
-    Tries the source package first and falls back to the ``-bin`` package when
-    the build cannot resolve makedepends. Returns the helper command name on
+    Prefers the ``-bin`` package on fresh systems (no go/rust makedepends) and
+    falls back to the source package. Returns the helper command name on
     success or None on failure.
     makepkg refuses to run as root so this must run as the normal user.
     SUDO_ASKPASS is set so that any sudo call inside makepkg uses our
@@ -45,8 +51,8 @@ def install_aur_helper(
     """
     helper = "paru" if choice == "paru" else "yay"
 
-    # Tenta o build normal e, se faltar makedepends (go/rust), o pacote -bin.
-    for package in (helper, f"{helper}-bin"):
+    # Em VM recém-instalada o -bin evita makedepends como go>=1.26/rust.
+    for package in (f"{helper}-bin", helper):
         aur_url = f"https://aur.archlinux.org/{package}.git"
         tmp_dir = Path(f"/tmp/{package}-aur-build")
 

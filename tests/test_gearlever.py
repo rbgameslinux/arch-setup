@@ -6,7 +6,7 @@ import json
 import os
 import tempfile
 import unittest
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -202,11 +202,15 @@ class GearLeverStructureTests(unittest.TestCase):
             target = Path("/home/usuario/Appimages/meu_app.appimage")
             with patch.dict(os.environ, {"XDG_CONFIG_HOME": tmp}):
                 gearlever_mod.record_installed(target, "Meu App", "--flag")
-            content = conf.read_text()
+                content = conf.read_text()
+                gearlever_mod.forget_installed(target)
+                after_forget = conf.read_text()
         digest = hashlib.md5(str(target).encode()).hexdigest()
         self.assertIn("[app.existente]", content)
         self.assertIn(f"[app.{digest}]", content)
         self.assertIn("default_exec_arguments = --flag", content)
+        self.assertIn("[app.existente]", after_forget)
+        self.assertNotIn(f"[app.{digest}]", after_forget)
 
     def test_dropped_appimage_keeps_original_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -230,7 +234,8 @@ class GearLeverStructureTests(unittest.TestCase):
                     )
                 )
             self.assertTrue(source.is_file(), "o arquivo arrastado não deve ser apagado")
-            self.assertTrue((folder / "meu_app.appimage_1_0.appimage").is_file())
+            self.assertTrue((folder / "meu_app.appimage").is_file())
+            self.assertFalse((folder / "meu_app.appimage_1_0.appimage").exists())
 
 
 class NewAppImageInstallTests(unittest.TestCase):
@@ -272,6 +277,7 @@ class NewAppImageInstallTests(unittest.TestCase):
 
             with (
                 patch.object(appimages_mod, "BIN_DIR", Path(tmp) / "bin"),
+                patch.object(appimages_mod, "APP_DIR", Path(tmp)),
                 patch.object(appimages_mod, "STAGING_DIR", staging),
                 patch.object(
                     gearlever_mod, "_configured_folder", return_value=str(folder)
@@ -308,6 +314,85 @@ class NewAppImageInstallTests(unittest.TestCase):
                 self.assertEqual(
                     mock_simple.call_args.args[4].parent, Path(tmp) / "bin"
                 )
+
+    def test_gearlever_finalize_reuses_or_replaces_installed_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "appimages"
+            folder.mkdir()
+            app_dir = root / "applications"
+            app_dir.mkdir()
+            icons = root / "icons"
+            logger = FakeLogger()
+            meta = appimages_mod.AppImageMetadata(
+                name="Heroic Games Launcher", version="2.22.4"
+            )
+            old = folder / "heroic_games_launcher.appimage_1_0.appimage"
+            old.write_bytes(b"antiga")
+            desktop = app_dir / "heroic_games_launcher.desktop"
+            desktop.write_text(
+                "[Desktop Entry]\nX-AppImage-Version=1.0\n", encoding="utf-8"
+            )
+            source = root / "Heroic.AppImage"
+            source.write_bytes(b"nova")
+
+            def enter_patches(stack: ExitStack) -> None:
+                stack.enter_context(
+                    patch.object(gearlever_mod, "appimages_dir", return_value=folder)
+                )
+                stack.enter_context(
+                    patch.object(gearlever_mod, "icons_dir", return_value=icons)
+                )
+                stack.enter_context(patch.object(appimages_mod, "APP_DIR", app_dir))
+                stack.enter_context(
+                    patch.object(appimages_mod, "_read_metadata", return_value=meta)
+                )
+                stack.enter_context(
+                    patch.object(appimages_mod, "_gearlever_icon", return_value=None)
+                )
+                stack.enter_context(patch.object(appimages_mod, "_write_full_desktop"))
+                stack.enter_context(patch.object(gearlever_mod, "record_installed"))
+                stack.enter_context(patch.object(gearlever_mod, "forget_installed"))
+
+            with ExitStack() as stack:
+                enter_patches(stack)
+                target = appimages_mod._gearlever_finalize(
+                    source,
+                    logger=logger,
+                    name="Heroic Games Launcher",
+                    comment="",
+                    icon_name="heroic",
+                    categories="Game;",
+                    wm_class="heroic",
+                    version="2.22.4",
+                )
+
+            canonical = folder / "heroic_games_launcher.appimage"
+            self.assertEqual(target, canonical)
+            self.assertEqual(canonical.read_bytes(), b"nova")
+            self.assertFalse(old.exists(), "versão antiga não foi removida")
+
+            # _write_full_desktop está mockado; simula o desktop da versão nova.
+            desktop.write_text(
+                "[Desktop Entry]\nX-AppImage-Version=2.22.4\n", encoding="utf-8"
+            )
+            source2 = root / "Heroic2.AppImage"
+            source2.write_bytes(b"download desnecessario")
+            with ExitStack() as stack:
+                enter_patches(stack)
+                skipped = appimages_mod._gearlever_finalize(
+                    source2,
+                    logger=logger,
+                    name="Heroic Games Launcher",
+                    comment="",
+                    icon_name="heroic",
+                    categories="Game;",
+                    wm_class="heroic",
+                    version="2.22.4",
+                )
+
+            self.assertEqual(skipped, canonical)
+            self.assertEqual(canonical.read_bytes(), b"nova")
 
     def test_gearlever_icon_uses_fresh_extraction(self) -> None:
         logger = FakeLogger()
@@ -347,7 +432,7 @@ class NewAppImageInstallTests(unittest.TestCase):
                 expected_url=url,
                 meta_name="Nexus Launcher",
                 meta_version="0.5.1",
-                expected_name="nexus_launcher.appimage_0_5_1.appimage",
+                expected_name="nexus_launcher.appimage",
             )
             self._install(
                 appimages_mod.install_nexus_launcher,

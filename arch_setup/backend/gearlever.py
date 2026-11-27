@@ -122,3 +122,21 @@ def record_installed(appimage: Path, name: str, exec_args: str = "") -> None:
     except (OSError, configparser.Error):
         # Config é apenas para interoperabilidade; falha não impede a instalação.
         pass
+
+
+def forget_installed(appimage: Path) -> None:
+    """Remove a seção ``app.<md5>`` correspondente ao AppImage informado."""
+    parser = configparser.ConfigParser(interpolation=None)
+    path = config_path()
+    try:
+        if not path.exists():
+            return
+        parser.read(path)
+        section = f"app.{hashlib.md5(str(appimage).encode()).hexdigest()}"
+        if not parser.has_section(section):
+            return
+        parser.remove_section(section)
+        with path.open("w", encoding="utf-8") as fh:
+            parser.write(fh)
+    except (OSError, configparser.Error):
+        pass

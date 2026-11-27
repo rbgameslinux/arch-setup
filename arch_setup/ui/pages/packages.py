@@ -585,6 +585,14 @@ class PackagesPage(Adw.PreferencesPage):
             if row.get_visible():
                 row._check.set_active(state)
 
+    def _clear_selections(self) -> None:
+        """Desmarca tudo ao terminar a execução, inclusive buscas e avulsos."""
+        for row in (*self._rows, *self._icon_rows, *self._custom_rows.values()):
+            row._check.set_active(False)
+        self._dropped_appimages.clear()
+        self._update_counts()
+        self._reorder_custom_rows()
+
     # ─────────────────────────── Plan building ──────────────────────────────
 
     def _on_install_clicked(self, button: Gtk.Button | None = None) -> None:
@@ -593,8 +601,14 @@ class PackagesPage(Adw.PreferencesPage):
             self._show_nothing_selected()
             return
         dialog = ExecutionDialog(plan)
+
+        def _after_run(_ok: bool) -> bool:
+            self._clear_selections()
+            self._refresh_state()
+            return GLib.SOURCE_REMOVE
+
         root = self.get_root()
-        dialog.start(root, on_complete=lambda _ok: GLib.idle_add(self._refresh_state))
+        dialog.start(root, on_complete=lambda ok: GLib.idle_add(_after_run, ok))
 
     def _show_nothing_selected(self) -> None:
         alert = Adw.AlertDialog.new(

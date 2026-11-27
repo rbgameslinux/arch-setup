@@ -44,7 +44,7 @@ class Phase5Tests(unittest.TestCase):
             "sudo pacman -S --needed python python-gobject gtk4 libadwaita polkit",
             "## Como usar",
             "## O que ele faz",
-            "89 testes automatizados",
+            "91 testes automatizados",
             "GNU General Public License",
         ):
             self.assertIn(expected, readme)

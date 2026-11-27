@@ -5,7 +5,7 @@ gráfica em **Python + GTK4 + Libadwaita (PyGObject)**. Tarefas privilegiadas
 usam **pkexec** (uma senha por lote); AUR, AppImages e fixes rodam na sessão do
 usuário, com **askpass gráfico** quando o sudo é necessário.
 
-**Versão atual:** `v2.0.0-rc2` (release candidate da migração GTK4).
+**Versão atual:** `v2.0.0-rc3` (release candidate da migração GTK4).
 
 ## Como usar
 
@@ -55,7 +55,7 @@ num editor). Se a pasta for movida ou apagada, o atalho deixa de funcionar.
 - **Correções e wallpapers**: regra PipeWire para o microfone do ZapZap,
   wrapper do DaVinci Resolve com seleção de monitor via `niri` e download de
   wallpapers com barra de progresso.
-- **Qualidade**: 89 testes automatizados; cada execução gera um log em
+- **Qualidade**: 91 testes automatizados; cada execução gera um log em
   `/tmp/arch-setup-<data>-<hora>.log`.
 
 ## Licença

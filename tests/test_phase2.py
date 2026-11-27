@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -97,14 +98,26 @@ class AurBackendTests(unittest.TestCase):
         self.assertTrue(any("base-devel" in line for line in logger.lines))
 
     @patch("arch_setup.backend.aur.shutil.which", return_value="/usr/bin/yay")
-    def test_install_aur_helper_falls_back_to_bin(self, _mock_which: object) -> None:
+    def test_install_aur_helper_falls_back_to_source(self, _mock_which: object) -> None:
         logger = FakeLogger()
-        # clone/makepkg de yay falham; clone/makepkg de yay-bin funcionam.
+        # clone/makepkg de yay-bin falham; clone/makepkg de yay funcionam.
         logger.set_cmd_returns([0, 1, 0, 0])
         result = aur_mod.install_aur_helper("yay", logger=logger)
         self.assertEqual(result, "yay")
-        self.assertTrue(any("makepkg falhou para yay" in line for line in logger.lines))
-        self.assertTrue(any("via yay-bin" in line for line in logger.lines))
+        self.assertTrue(
+            any("makepkg falhou para yay-bin" in line for line in logger.lines)
+        )
+        self.assertTrue(any("via yay" in line for line in logger.lines))
+
+    def test_askpass_script_gains_executable_bit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / "askpass.py"
+            script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            script.chmod(0o644)
+            with patch.object(aur_mod, "ASKPASS_SCRIPT", script):
+                env = aur_mod._build_env_with_askpass()
+            self.assertEqual(env["SUDO_ASKPASS"], str(script))
+            self.assertTrue(script.stat().st_mode & 0o111)
 
 
 class AppImagesBackendTests(unittest.TestCase):
@@ -212,6 +225,12 @@ class PackagesUIRowsTests(unittest.TestCase):
         plan = page._build_plan()
         self.assertIsNotNone(plan)
         self.assertTrue(plan.stages)
+
+        page._clear_selections()
+        self.assertFalse(first._check.get_active())
+        self.assertIn(
+            "0 selecionado", page._expanders[first.item.category].get_subtitle()
+        )
 
         page._aur_switch_row.set_active(True)
         aur_row = next(r for r in page._rows if r.item.source == "aur")
