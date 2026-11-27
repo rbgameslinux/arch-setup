@@ -34,50 +34,62 @@ def install_aur_helper(
     *,
     logger: TaskLogger,
 ) -> str | None:
-    """Clone and build the chosen AUR helper (paru or yay) via makepkg -si.
+    """Clone and build the chosen AUR helper via makepkg -si.
 
-    Returns the helper name on success or None on failure.
+    Tries the source package first and falls back to the ``-bin`` package when
+    the build cannot resolve makedepends. Returns the helper command name on
+    success or None on failure.
     makepkg refuses to run as root so this must run as the normal user.
     SUDO_ASKPASS is set so that any sudo call inside makepkg uses our
     GTK4 password dialog.
     """
     helper = "paru" if choice == "paru" else "yay"
-    aur_url = f"https://aur.archlinux.org/{helper}.git"
-    tmp_dir = Path(f"/tmp/{helper}-aur-build")
 
-    logger.info(f"Instalando AUR helper: {helper}")
+    # Tenta o build normal e, se faltar makedepends (go/rust), o pacote -bin.
+    for package in (helper, f"{helper}-bin"):
+        aur_url = f"https://aur.archlinux.org/{package}.git"
+        tmp_dir = Path(f"/tmp/{package}-aur-build")
 
-    # Remove stale clone
-    if tmp_dir.exists():
+        logger.info(f"Instalando AUR helper: {package}")
+
+        # Remove stale clone
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        env = _build_env_with_askpass()
+
+        # Clone
+        rc = logger.run_command(["git", "clone", aur_url, str(tmp_dir)])
+        if rc != 0:
+            logger.warn(f"Falha ao clonar {aur_url}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            continue
+
+        # makepkg -si --noconfirm: instala o helper e suas deps via sudo
+        rc = logger.run_command(
+            ["makepkg", "-si", "--noconfirm"],
+            cwd=tmp_dir,
+            env=env,
+        )
+
+        # Cleanup
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    env = _build_env_with_askpass()
+        if rc != 0:
+            logger.warn(f"makepkg falhou para {package}")
+            continue
 
-    # Clone
-    rc = logger.run_command(["git", "clone", aur_url, str(tmp_dir)])
-    if rc != 0:
-        logger.warn(f"Falha ao clonar {aur_url}")
-        return None
+        # Tanto o build normal quanto o -bin fornecem o mesmo comando.
+        if shutil.which(helper):
+            logger.info(f"{helper} instalado com sucesso via {package}.")
+            return helper
 
-    # makepkg -si --noconfirm: instala o helper e suas deps via sudo
-    rc = logger.run_command(
-        ["makepkg", "-si", "--noconfirm"],
-        cwd=tmp_dir,
-        env=env,
+        logger.warn(f"{helper} não encontrado no PATH após instalar {package}.")
+
+    logger.warn(
+        f"Não foi possível instalar {helper}. Verifique base-devel, git e o acesso "
+        "aos repositórios; instale manualmente: sudo pacman -S --needed base-devel git"
     )
-
-    # Cleanup
-    shutil.rmtree(tmp_dir, ignore_errors=True)
-
-    if rc != 0:
-        logger.warn(f"makepkg falhou para {helper}")
-        return None
-
-    if shutil.which(helper):
-        logger.info(f"{helper} instalado com sucesso.")
-        return helper
-
-    logger.warn(f"{helper} não encontrado no PATH após a instalação.")
     return None
 
 

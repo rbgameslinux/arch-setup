@@ -703,7 +703,9 @@ class PackagesPage(Adw.PreferencesPage):
                 )
                 if not helper:
                     raise RuntimeError(
-                        "Nenhum AUR helper disponível; pacotes AUR não instalados."
+                        "Não foi possível instalar um AUR helper; pacotes AUR não instalados. "
+                        "Verifique base-devel/git e a conexão com os repositórios "
+                        "(sudo pacman -S --needed base-devel git)."
                     )
                 # Install electron29-bin as base AUR dependency
                 if aur_mod.install_electron29_bin(helper=helper, logger=logger) != 0:

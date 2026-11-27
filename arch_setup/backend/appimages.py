@@ -121,7 +121,7 @@ def _download_file(url: str, dest: Path, label: str, logger: TaskLogger) -> bool
 
 @dataclass(frozen=True)
 class AppImageMetadata:
-    """Dados lidos de dentro do AppImage (`.desktop` e ícone embutidos)."""
+    """Dados lidos de dentro do AppImage (`.desktop` embutido)."""
 
     name: str = ""
     comment: str = ""
@@ -130,8 +130,6 @@ class AppImageMetadata:
     wm_class: str = ""
     mime: str = ""
     version: str = ""
-    icon_src: Path | None = None
-    icon_ext: str = ""
 
 
 @contextmanager
@@ -175,6 +173,27 @@ def _find_icon(squash: Path) -> tuple[Path, str] | None:
                 ext = "svg" if pattern == "*.svg" else "png"
                 return candidate, ext
     return None
+
+
+def _copy_icon_file(
+    src: Path,
+    ext: str,
+    dest_dir: Path,
+    icon_name: str,
+    logger: TaskLogger,
+    *,
+    label: str,
+) -> str | None:
+    """Copia um ícone já localizado para `dest_dir` dentro da extração atual."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    icon_path = dest_dir / f"{icon_name}.{ext}"
+    try:
+        shutil.copy2(src, icon_path)
+    except OSError as exc:
+        logger.warn(f"Falha ao copiar ícone de {label}: {exc}")
+        return None
+    _refresh_icon_cache()
+    return str(icon_path)
 
 
 def _parse_desktop_entry(path: Path) -> dict[str, str]:
@@ -232,7 +251,6 @@ def _read_metadata(appimage: Path, logger: TaskLogger) -> AppImageMetadata | Non
                 break
         else:
             parsed = {}
-        icon = _find_icon(squash)
         return AppImageMetadata(
             name=parsed.get("Name", ""),
             comment=parsed.get("Comment", ""),
@@ -241,8 +259,6 @@ def _read_metadata(appimage: Path, logger: TaskLogger) -> AppImageMetadata | Non
             wm_class=parsed.get("StartupWMClass", ""),
             mime=parsed.get("MimeType", ""),
             version=parsed.get("X-AppImage-Version", ""),
-            icon_src=icon[0] if icon else None,
-            icon_ext=icon[1] if icon else "",
         )
 
 
@@ -251,7 +267,7 @@ def _extract_appimage_icon(
     icon_name: str,
     logger: TaskLogger,
 ) -> str | None:
-    """Extract icon from AppImage and install into hicolor; returns icon path or name."""
+    """Extrai e instala o ícone no hicolor; devolve o caminho ou None."""
     with _extracted(appimage, logger) as squash:
         if squash is None:
             return None
@@ -259,20 +275,37 @@ def _extract_appimage_icon(
         if found is None:
             return None
         src, ext = found
-        if ext == "svg":
-            dest_dir = ICONS_DIR / "scalable" / "apps"
-        else:
-            dest_dir = ICONS_DIR / "256x256" / "apps"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        icon_path = dest_dir / f"{icon_name}.{ext}"
-        try:
-            shutil.copy2(src, icon_path)
-        except OSError as exc:
-            logger.warn(f"Falha ao copiar ícone de {appimage.name}: {exc}")
-            return None
+        dest_dir = (
+            ICONS_DIR / "scalable" / "apps"
+            if ext == "svg"
+            else ICONS_DIR / "256x256" / "apps"
+        )
+        return _copy_icon_file(
+            src, ext, dest_dir, icon_name, logger, label=appimage.name
+        )
 
-    _refresh_icon_cache()
-    return str(icon_path)
+
+def _gearlever_icon(
+    appimage: Path,
+    prefix: str,
+    logger: TaskLogger,
+) -> str | None:
+    """Copia o ícone para a pasta do Gear Lever na mesma extração temporária."""
+    with _extracted(appimage, logger) as squash:
+        if squash is None:
+            return None
+        found = _find_icon(squash)
+        if found is None:
+            return None
+        src, ext = found
+        return _copy_icon_file(
+            src,
+            ext,
+            gearlever_mod.icons_dir(logger),
+            prefix,
+            logger,
+            label=appimage.name,
+        )
 
 
 def _refresh_icon_cache() -> None:
@@ -449,18 +482,10 @@ def _gearlever_finalize(
         return None
 
     prefix = target.stem
-    icon = "applications-other"
-    if meta and meta.icon_src:
-        icon_dest = gearlever_mod.icons_dir(logger) / f"{prefix}.{meta.icon_ext}"
-        try:
-            shutil.copy2(meta.icon_src, icon_dest)
-            icon = str(icon_dest)
-            _refresh_icon_cache()
-        except OSError as exc:
-            logger.warn(f"Falha ao copiar ícone de {name}: {exc}")
+    icon = _gearlever_icon(source, prefix, logger) or "applications-other"
 
     effective_meta = meta or AppImageMetadata(
-        categories=categories, wm_class=wm_class, icon_ext=""
+        categories=categories, wm_class=wm_class
     )
     _write_full_desktop(
         target,

@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -283,6 +284,9 @@ class NewAppImageInstallTests(unittest.TestCase):
                 ),
                 patch.object(appimages_mod, "_write_desktop") as mock_simple,
                 patch.object(appimages_mod, "_write_full_desktop") as mock_full,
+                patch.object(
+                    appimages_mod, "_gearlever_icon", return_value="applications-other"
+                ) as mock_icon,
                 patch.object(gearlever_mod, "record_installed") as mock_record,
             ):
                 self.assertTrue(installer(logger, use_gearlever=use_gearlever))
@@ -290,6 +294,7 @@ class NewAppImageInstallTests(unittest.TestCase):
             if use_gearlever:
                 target = folder / expected_name
                 self.assertTrue(target.is_file())
+                mock_icon.assert_called_once()
                 mock_simple.assert_not_called()
                 mock_full.assert_called_once()
                 self.assertEqual(mock_full.call_args.args[0], target)
@@ -297,11 +302,41 @@ class NewAppImageInstallTests(unittest.TestCase):
                 self.assertEqual(list(staging.iterdir()), [])
             else:
                 mock_full.assert_not_called()
+                mock_icon.assert_not_called()
                 mock_record.assert_not_called()
                 mock_simple.assert_called_once()
                 self.assertEqual(
                     mock_simple.call_args.args[4].parent, Path(tmp) / "bin"
                 )
+
+    def test_gearlever_icon_uses_fresh_extraction(self) -> None:
+        logger = FakeLogger()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            squash = root / "squashfs-root"
+            icon = squash / "usr/share/icons/hicolor/256x256/apps/heroic.png"
+            icon.parent.mkdir(parents=True)
+            icon.write_bytes(b"png")
+            icons = root / "icons"
+
+            @contextmanager
+            def fake_extracted(appimage: Path, log: object):
+                yield squash
+
+            source = root / "Heroic.AppImage"
+            source.write_bytes(b"fake-appimage")
+            with (
+                patch.object(appimages_mod, "_extracted", fake_extracted),
+                patch.object(appimages_mod, "_refresh_icon_cache"),
+                patch.object(gearlever_mod, "icons_dir", return_value=icons),
+            ):
+                result = appimages_mod._gearlever_icon(source, "heroic", logger)
+
+            self.assertEqual(result, str(icons / "heroic.png"))
+            self.assertEqual((icons / "heroic.png").read_bytes(), b"png")
+            self.assertFalse(
+                any("Falha ao copiar ícone" in line for line in logger.lines)
+            )
 
     def test_nexus_launcher(self) -> None:
         url = "https://github.com/domsvoboda/nexus-launcher/releases/download/v0.5.1/Nexus-Launcher-0.5.1-x86_64.AppImage"

@@ -26,6 +26,7 @@ class FakeLogger:
         self.progress: list[float] = []
         self.last_cmd: list[str] = []
         self._cmd_return = 0
+        self._cmd_returns: list[int] | None = None
 
     def info(self, msg: str) -> None:
         self.lines.append(f"[INFO] {msg}")
@@ -44,6 +45,10 @@ class FakeLogger:
 
     def set_cmd_return(self, rc: int) -> None:
         self._cmd_return = rc
+        self._cmd_returns = None
+
+    def set_cmd_returns(self, returns: list[int]) -> None:
+        self._cmd_returns = list(returns)
 
     def run_command(
         self,
@@ -53,6 +58,8 @@ class FakeLogger:
         env: dict | None = None,
     ) -> int:
         self.last_cmd = cmd
+        if self._cmd_returns is not None:
+            return self._cmd_returns.pop(0) if self._cmd_returns else self._cmd_return
         return self._cmd_return
 
 
@@ -84,7 +91,20 @@ class AurBackendTests(unittest.TestCase):
         logger.set_cmd_return(1)
         result = aur_mod.install_aur_helper("paru", logger=logger)
         self.assertIsNone(result)
-        self.assertTrue(any("Falha ao clonar" in l for l in logger.lines))
+        self.assertEqual(
+            sum("Falha ao clonar" in line for line in logger.lines), 2
+        )
+        self.assertTrue(any("base-devel" in line for line in logger.lines))
+
+    @patch("arch_setup.backend.aur.shutil.which", return_value="/usr/bin/yay")
+    def test_install_aur_helper_falls_back_to_bin(self, _mock_which: object) -> None:
+        logger = FakeLogger()
+        # clone/makepkg de yay falham; clone/makepkg de yay-bin funcionam.
+        logger.set_cmd_returns([0, 1, 0, 0])
+        result = aur_mod.install_aur_helper("yay", logger=logger)
+        self.assertEqual(result, "yay")
+        self.assertTrue(any("makepkg falhou para yay" in line for line in logger.lines))
+        self.assertTrue(any("via yay-bin" in line for line in logger.lines))
 
 
 class AppImagesBackendTests(unittest.TestCase):

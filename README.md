@@ -55,7 +55,7 @@ num editor). Se a pasta for movida ou apagada, o atalho deixa de funcionar.
 - **Correções e wallpapers**: regra PipeWire para o microfone do ZapZap,
   wrapper do DaVinci Resolve com seleção de monitor via `niri` e download de
   wallpapers com barra de progresso.
-- **Qualidade**: 87 testes automatizados; cada execução gera um log em
+- **Qualidade**: 89 testes automatizados; cada execução gera um log em
   `/tmp/arch-setup-<data>-<hora>.log`.
 
 ## Licença
