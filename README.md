@@ -17,18 +17,28 @@ chmod +x run.sh   # se baixou por ZIP em vez de git clone
 ```
 
 `run.sh` recusa root, verifica `python3`, `python-gobject`, `gtk4`, `libadwaita`
-e `polkit`, instala o que faltar via `pacman` e inicia a GUI. O app **não fica
-instalado no sistema**: ele roda direto da pasta do projeto.
+e `polkit`. Se faltar algum, ele primeiro abre a janela de senha do **polkit**
+via `pkexec`; sem `pkexec`, usa `sudo` **apenas se houver terminal**; sem os
+dois, mostra o comando e sai:
 
-### Atalho no menu (opcional)
+```bash
+sudo pacman -S --needed python python-gobject gtk4 libadwaita polkit
+```
+
+O app **não fica instalado no sistema**: ele roda direto da pasta do projeto.
+
+### Atalho no menu (opcional, mas recomendado)
 
 ```bash
 ./scripts/install-desktop-entry.sh
 ```
 
 Cria `~/.local/share/applications/io.github.rbgameslinux.ArchSetup.desktop`
-apontando para o `run.sh` desta pasta, com `Terminal=false`. Se a pasta for
-movida ou apagada, o atalho deixa de funcionar.
+apontando para o `run.sh` desta pasta, com `Terminal=false`. Como é um `.desktop`
+padrão XDG, o atalho aparece no menu do KDE, do XFCE/Thunar, do GNOME etc. Use
+o atalho em vez de depender do duplo clique no `run.sh`: cada gerenciador de
+arquivos trata `.sh` do seu jeito (o Thunar, por exemplo, pode abrir o arquivo
+num editor). Se a pasta for movida ou apagada, o atalho deixa de funcionar.
 
 ## O que ele faz
 
