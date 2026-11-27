@@ -66,6 +66,36 @@ class GearLeverLogicTests(unittest.TestCase):
                 gearlever_mod.appimages_dir(), Path.home() / "AppImages"
             )
 
+    def test_missing_schema_does_not_call_gio_settings(self) -> None:
+        """Schema ausente nao pode abortar o processo com GLib-GIO-ERROR."""
+        settings_new = "gi.repository.Gio.Settings.new"
+        with (
+            patch.object(gearlever_mod, "_schema_available", return_value=False),
+            patch(settings_new) as mock_new,
+        ):
+            self.assertIsNone(gearlever_mod._configured_folder())
+        mock_new.assert_not_called()
+
+    def test_schema_lookup_is_checked_before_use(self) -> None:
+        with patch("gi.repository.Gio.SettingsSchemaSource.get_default") as mock_src:
+            mock_src.return_value.lookup.return_value = None
+            self.assertFalse(gearlever_mod._schema_available())
+            mock_src.return_value.lookup.assert_called_once_with(
+                gearlever_mod.SCHEMA, True
+            )
+
+    def test_configured_folder_reads_value_when_schema_exists(self) -> None:
+        settings = MagicMock()
+        settings.get_string.return_value = "/home/usuario/Appimages"
+        with (
+            patch.object(gearlever_mod, "_schema_available", return_value=True),
+            patch("gi.repository.Gio.Settings.new", return_value=settings) as mock_new,
+        ):
+            self.assertEqual(
+                gearlever_mod._configured_folder(), "/home/usuario/Appimages"
+            )
+        mock_new.assert_called_once_with(gearlever_mod.SCHEMA)
+
     def test_prepare_destination_creates_folder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(gearlever_mod, "_configured_folder", return_value=tmp):

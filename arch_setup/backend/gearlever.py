@@ -7,8 +7,10 @@ chave GSettings ``appimages-default-folder`` do schema ``it.mijorus.gearlever``
 parte do trabalho de integração, que é o motivo da abertura mais rápida.
 
 Aqui reproduzimos exatamente essa lógica: lemos a pasta configurada pelo
-próprio Gear Lever e geramos o ``.desktop`` com a mesma variável. Nenhum
-comando do Gear Lever é executado e nenhum Flatpak é utilizado.
+próprio Gear Lever quando o schema GSettings existe e geramos o ``.desktop``
+com a mesma variável. Sem o schema (máquina sem o Gear Lever), usamos
+``~/AppImages`` sem abortar. Nenhum comando do Gear Lever é executado e nenhum
+Flatpak é utilizado.
 """
 
 from __future__ import annotations
@@ -36,8 +38,26 @@ def is_available() -> bool:
     return native_binary() is not None
 
 
+def _schema_available() -> bool:
+    """Verifica se o schema GSettings existe antes de instanciar Gio.Settings.
+
+    Chamar ``Gio.Settings.new()`` com um schema inexistente gera um
+    ``GLib-GIO-ERROR`` fatal (o processo aborta), então a checagem precisa
+    acontecer primeiro.
+    """
+    try:
+        from gi.repository import Gio
+
+        source = Gio.SettingsSchemaSource.get_default()
+        return source is not None and source.lookup(SCHEMA, True) is not None
+    except Exception:
+        return False
+
+
 def _configured_folder() -> str | None:
-    """Lê a pasta configurada no Gear Lever via GSettings/dconf."""
+    """Lê a pasta configurada no Gear Lever via GSettings/dconf, se existir."""
+    if not _schema_available():
+        return None
     try:
         from gi.repository import Gio
 
@@ -50,10 +70,11 @@ def _configured_folder() -> str | None:
 
 def appimages_dir(logger: Any | None = None) -> Path:
     """Pasta de AppImages escolhida no Gear Lever (com ``~`` expandido)."""
-    folder = _configured_folder() or DEFAULT_FOLDER
-    path = Path(os.path.expanduser(folder)).expanduser()
+    folder = _configured_folder()
+    path = Path(os.path.expanduser(folder or DEFAULT_FOLDER)).expanduser()
     if logger is not None and hasattr(logger, "info"):
-        logger.info(f"Pasta de AppImages (configuração Gear Lever): {path}")
+        origem = "configuração Gear Lever" if folder else "padrão (schema ausente)"
+        logger.info(f"Pasta de AppImages ({origem}): {path}")
     return path
 
 
